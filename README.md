@@ -87,8 +87,11 @@ python server/server.py --host 0.0.0.0
 ### 3. Questアプリをビルドする
 
 1. `UnityMetaQuest` フォルダを Unity で開きます
-2. `Assets/Scenes/SpatialSearchLite.unity` を開きます
-3. Questへビルドして実行します
+2. 使うシーンを開きます
+   - `Assets/Scenes/SpatialSearchLite.unity` : 見つかった物をピンクの点群で表示します
+   - `Assets/Scenes/SpatialSearchLiteGrab.unity` : 見つかった物をカメラ画像の色の点群で表示し、コントローラでつかんで動かせます（[6. 見つけた物をつかむ](#6-見つけた物をつかむspatialsearchlitegrab-シーン)）
+3. Build Profiles のシーン一覧で、使うシーンにチェックを入れます
+4. Questへビルドして実行します
 
 ### 4. サーバーに接続する
 
@@ -102,9 +105,19 @@ python server/server.py --host 0.0.0.0
 1. 左コントローラのパネルにある **Search** ボタンを右手のレイで押すと、検索ウィンドウが開きます（もう一度押すと閉じます）
 2. 検索ウィンドウに探したい物の名前を **英語で** 入力します（例: `monitor`、`chair`、`cup`）
 3. 探したい物の方を向いて、ウィンドウの **Search** を押します。ウィンドウは自動で閉じます
-4. 数秒後、見つかった物体の位置にピンクの点群が表示されます。左コントローラのパネルに検索の状態と見つかった数が表示されます
+4. 数秒後、見つかった物体の位置にピンクの点群が表示されます（`SpatialSearchLiteGrab` シーンではカメラ画像の色）。左コントローラのパネルに検索の状態と見つかった数が表示されます
 
-別の物を探すときは、もう一度検索ウィンドウを開いて検索します。
+別の物を探すときは、もう一度検索ウィンドウを開いて検索します。前の検索結果の点群は消えます。
+
+### 6. 見つけた物をつかむ（SpatialSearchLiteGrab シーン）
+
+`SpatialSearchLiteGrab` シーンでは、見つかった物体ごとに別々の点群になり、コントローラでつかんで動かせます。
+
+1. コントローラを点群に近づけます。つかめる距離に入ると、点群が白っぽくなります
+2. **グリップボタン**（中指で握るボタン）を握るとつかめます。つかんでいる間は点群が黄色がかります
+3. 握ったまま動かすと点群が付いてきます。離すとその場に残ります
+
+両手のコントローラで同じ点群をつかむと、大きさも変えられます。手（ハンドトラッキング）ではつかめません。
 
 ## 設定できる項目
 
@@ -114,7 +127,11 @@ python server/server.py --host 0.0.0.0
 | `Logic/Search` の Search Capture | Min / Max Depth Meters | この距離の範囲にある点だけを使います |
 | `Logic/WebSocket` の Search Client | Server Port | Pythonサーバーのポート |
 | `SearchWindow` / `ServerDialog` の Head Follow | Distance / Height Offset / Follow Speed | ウィンドウを出す距離・高さ、頭に追いつく速さ |
-| `Logic/SearchResultView` | Color / Point Size | 結果の点の色と大きさ |
+| `Logic/SearchResultView`（SpatialSearchLite） | Color / Point Size | 結果の点の色と大きさ |
+| `Logic/SearchResultView`（SpatialSearchLiteGrab） | Outlier Ratio / Min Collider Size | つかめる範囲の箱を決めるときに外す端の点の割合と、箱の最小の大きさ |
+| `Assets/Materials/SpatialSearchColoredPointsMat` | Point Scale / Min / Max Pixel Size | カメラ画像の色で描く点の大きさ（撮影したときの点の間隔の何倍か）と、画面上での最小・最大のピクセル数。点の間に隙間が見えるときは Point Scale を上げます |
+| 〃 | Depth Tolerance | 重なった点を同じ面として描く奥行きの幅（点の大きさの何倍か）。ちらつくときは上げ、後ろの点が透けて見えるときは下げます |
+| `Assets/Prefabs/GrabbableSearchResult` の Interactable Color Visual | Hover / Select Color State | 近づけた・つかんだときに重ねる色（Aが重ねる強さ） |
 
 ## うまくいかないとき
 
@@ -125,6 +142,7 @@ python server/server.py --host 0.0.0.0
 | `ComfyUI execution failed` と出る | チェックポイントのファイル名と置き場所（`models/checkpoints/`）が合っているか |
 | `was not found` になる | 検索語を英語の一般的な名前にする、物体に近づく、`--threshold` を下げる |
 | 点がずれて表示される | 検索中は頭を大きく動かさないでください。撮影した瞬間の位置で点群を作っています |
+| 点群をつかめない | `SpatialSearchLiteGrab` シーンか確認し、コントローラを点群の中まで入れてからグリップボタンを握ってください。手ではつかめません |
 
 ## しくみ
 
@@ -133,9 +151,12 @@ Unity側のスクリプトは `UnityMetaQuest/Assets/Scripts/SpatialSearchLite/`
 | クラス | 役割 |
 |---|---|
 | `MainCoordinator` | 3つのクラスをつなぎ、UIの操作（IPダイアログ、検索ウィンドウの開閉、検索の開始）を受け持ちます |
-| `SearchCapture` | `Capture(検索語)` が呼ばれたらカメラ画像と深度を撮影します。深度の各点が画像のどこに写るかも計算して `SetCapture` します |
+| `SearchCapture` | `Capture(検索語)` が呼ばれたらカメラ画像と深度を撮影します。深度の各点が画像のどこに写るかと、その位置の色も求めて `SetCapture` します |
 | `SearchClient` | 撮影データを受け取ったら画像と検索語をサーバーへ送ります。返ってきたマスクを `SetResult` します |
-| `SearchResultView` | マスクの白い部分に写っていた点だけを集めて表示します |
+| `SearchResultView` | マスクの白い部分に写っていた点だけを集めて、まとめて単色で表示します（SpatialSearchLite シーン） |
+| `GrabbableSearchResultView` | 見つかった物体ごとにひな形のプレハブ `GrabbableSearchResult` を複製し、点をカメラ画像の色で表示します。つかめる範囲の箱も点群に合わせます（SpatialSearchLiteGrab シーン） |
+
+つかむ仕組みは Meta XR Interaction SDK の部品をそのまま使っています。プレハブ `GrabbableSearchResult` に `Grabbable` / `GrabFreeTransformer` / `GrabInteractable` が付いていて、シーンのインタラクションリグにあるコントローラの `ControllerGrabInteractor` からつかめます。
 
 サーバー側は `server/` にあります。`server.py` がUnityとのWebSocket通信を、`sam3_comfyui.py` がComfyUIの呼び出しを担当します。
 

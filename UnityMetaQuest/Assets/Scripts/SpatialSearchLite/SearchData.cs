@@ -5,12 +5,15 @@ using UnityEngine;
 // 撮影した瞬間のデータ。
 // Points[i] を画像へ投影した位置が ImageUvs[i]（0〜1、左下原点）で、
 // サーバーから返ってきたマスクを ImageUvs で引けば、その点が物体上にあるかが分かる。
+// Colors[i] はその位置のカメラ画像の色（sRGB）、PointSizes[i] は撮影したときの点の間隔（m、深度1画素ぶんの幅）。
 public class CaptureData
 {
     public string Query;
     public Texture2D Image;
     public Vector3[] Points;
     public Vector2[] ImageUvs;
+    public Color32[] Colors;
+    public float[] PointSizes;
 }
 
 // 検索結果。どの撮影に対する結果かを分かるよう Capture を持たせる。

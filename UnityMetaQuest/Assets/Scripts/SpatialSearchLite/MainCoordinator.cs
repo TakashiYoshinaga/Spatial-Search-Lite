@@ -6,7 +6,7 @@ using UnityEngine.UI;
 // 3つのクラスに同じ DataSource を渡してつなぎ、UIの操作もここで受け持つ。
 //   SearchCapture    : Capture(query) で撮影 → DataSource.SetCapture
 //   SearchClient     : 撮影データをサーバーへ送る → 結果を DataSource.SetResult
-//   SearchResultView : 結果の点群を表示
+//   SearchResultView : 結果の点群を表示（つかめる版は GrabbableSearchResultView）
 //
 // UIの流れ
 //   起動 → サーバーIPダイアログ（前回のIPを入れておく）→ Connect → 接続できたら閉じる
@@ -22,7 +22,7 @@ public class MainCoordinator : MonoBehaviour
     [Header("Logic")]
     [SerializeField] SearchCapture _capture;
     [SerializeField] SearchClient _client;
-    [SerializeField] SearchResultView _resultView;
+    [SerializeField] SearchResultViewBase _resultView;
 
     [Header("Server Dialog")]
     [SerializeField] GameObject _serverDialog;

@@ -7,7 +7,7 @@ using UnityEngine.Rendering;
 // 結果を表示するクラス。
 // マスクの白い部分に写っていた点だけを集め、ワールド空間に点群として描く。
 [RequireComponent(typeof(MeshFilter), typeof(MeshRenderer))]
-public class SearchResultView : MonoBehaviour
+public class SearchResultView : SearchResultViewBase
 {
     static readonly int ColorId = Shader.PropertyToID("_Color");
     static readonly int PointSizeId = Shader.PropertyToID("_PointSize");
@@ -24,7 +24,7 @@ public class SearchResultView : MonoBehaviour
     Material _material;
     SearchResult _shownResult;
 
-    public void Initialize(SpatialSearchDataSource dataSource)
+    public override void Initialize(SpatialSearchDataSource dataSource)
     {
         _mesh = new Mesh { name = "SearchResultPoints", indexFormat = IndexFormat.UInt32 };
         GetComponent<MeshFilter>().sharedMesh = _mesh;

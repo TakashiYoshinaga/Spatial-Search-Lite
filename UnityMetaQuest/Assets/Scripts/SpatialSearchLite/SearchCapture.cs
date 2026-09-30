@@ -102,10 +102,15 @@ public class SearchCapture : MonoBehaviour
         return _image;
     }
 
-    // 深度の各点をワールド座標へ戻し、カメラ画像上のUVも求める。
+    // 深度の各点をワールド座標へ戻し、カメラ画像上のUVとその位置の色も求める。
     // 計算式は Assets/Shaders/ColoredDepthPointCloudCpuURP.shader と同じ。
     void BuildPoints(CaptureData capture)
     {
+        // 画像は左下から右へ、下の行から順に並ぶ（UVと同じ向き）
+        var pixels = capture.Image.GetPixels32();
+        var imageWidth = capture.Image.width;
+        var imageHeight = capture.Image.height;
+
         // --- カメラ画像への投影に使う値 ---
         // CurrentResolution はセンサー画像の中央を切り抜いたものなので、その切り抜き範囲を求める。
         var intrinsics = _cameraAccess.Intrinsics;
@@ -124,9 +129,14 @@ public class SearchCapture : MonoBehaviour
         var depthLocalToWorld = Matrix4x4.TRS(_depthPose.position, _depthPose.rotation, Vector3.one);
         var clipToDepthLocal = (_depthViewProjection * depthLocalToWorld).inverse;
 
+        // 点の間隔（深度1画素の幅）は深度に比例するので、1m先での幅を求めておく。
         var textureSize = _depthAccess.TextureSize;
+        var pixelWidthAtOneMeter = PixelWidthAtOneMeter(clipToDepthLocal, zBufferParams, textureSize);
+
         var points = new List<Vector3>(_depth.Length);
         var uvs = new List<Vector2>(_depth.Length);
+        var colors = new List<Color32>(_depth.Length);
+        var sizes = new List<float>(_depth.Length);
 
         for (var y = 0; y < textureSize; y++)
         {
@@ -153,13 +163,37 @@ public class SearchCapture : MonoBehaviour
                 var uv = new Vector2((sensorX - cropOrigin.x) / cropSize.x, (sensorY - cropOrigin.y) / cropSize.y);
                 if (uv.x < 0f || uv.x > 1f || uv.y < 0f || uv.y > 1f) continue; // 画像に写っていない点
 
+                var pixelX = Mathf.Min((int)(uv.x * imageWidth), imageWidth - 1);
+                var pixelY = Mathf.Min((int)(uv.y * imageHeight), imageHeight - 1);
+
                 points.Add(world);
                 uvs.Add(uv);
+                colors.Add(pixels[pixelY * imageWidth + pixelX]);
+                sizes.Add(depth * pixelWidthAtOneMeter);
             }
         }
 
         capture.Points = points.ToArray();
         capture.ImageUvs = uvs.ToArray();
+        capture.Colors = colors.ToArray();
+        capture.PointSizes = sizes.ToArray();
+    }
+
+    // 深度画像の中央の1画素が、1m先でどれだけの幅になるか。
+    static float PixelWidthAtOneMeter(Matrix4x4 clipToDepthLocal, Vector4 zBufferParams, int textureSize)
+    {
+        var clipZ = zBufferParams.x - zBufferParams.y; // 深度1mのときのクリップ座標のz
+        var step = 2f / textureSize;
+        var center = Unproject(clipToDepthLocal, new Vector4(0f, 0f, clipZ, 1f));
+        var right = Unproject(clipToDepthLocal, new Vector4(step, 0f, clipZ, 1f));
+        var up = Unproject(clipToDepthLocal, new Vector4(0f, step, clipZ, 1f));
+        return Mathf.Max(Vector3.Distance(center, right), Vector3.Distance(center, up));
+    }
+
+    static Vector3 Unproject(Matrix4x4 clipToLocal, Vector4 clip)
+    {
+        var local = clipToLocal * clip;
+        return (Vector3)local / local.w;
     }
 
     void OnDepthUpdated(DepthTextureAccess.DepthFrameData frame)
