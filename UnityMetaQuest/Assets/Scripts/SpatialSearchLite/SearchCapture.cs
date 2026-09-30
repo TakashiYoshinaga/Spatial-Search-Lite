@@ -1,11 +1,10 @@
 using System.Collections.Generic;
 using Meta.XR;
 using Meta.XR.BuildingBlocks.AIBlocks;
-using TMPro;
 using UnityEngine;
 
 // 画像を取得するクラス。
-// ボタンを押した瞬間のパススルーカメラ画像と深度の点群を DataSource へ流す。
+// Capture を呼んだ瞬間のパススルーカメラ画像と深度の点群を DataSource へ流す。
 //
 // 点群は「深度の各点をカメラ画像のどこに写るか」まで計算しておく（ImageUvs）。
 // サーバーからマスクが返ってきたら、そのUVでマスクを引くだけで3D上の位置が分かる。
@@ -15,14 +14,6 @@ public class SearchCapture : MonoBehaviour
 
     [SerializeField] PassthroughCameraAccess _cameraAccess;
     [SerializeField] DepthTextureAccess _depthAccess;
-
-    [Header("Query")]
-    [Tooltip("検索語の入力欄。空なら Default Query を使う")]
-    [SerializeField] TMP_InputField _queryInputField;
-    [SerializeField] string _defaultQuery = "monitor";
-
-    [Header("Input")]
-    [SerializeField] OVRInput.RawButton _searchButton = OVRInput.RawButton.B;
 
     [Header("Depth")]
     [SerializeField, Min(0f)] float _minDepthMeters = 0.1f;
@@ -63,40 +54,28 @@ public class SearchCapture : MonoBehaviour
 
         // 深度は要求しないと更新されない。毎フレーム最新を取っておく。
         _depthAccess.RequestDepthSample();
-
-        if (OVRInput.GetDown(_searchButton))
-        {
-            Capture();
-        }
     }
 
-    public void Capture()
+    // 今のカメラ画像と深度を撮影して DataSource へ流す。まだ撮影できない状態なら false。
+    public bool Capture(string query)
     {
-        if (_dataSource == null) return;
+        if (_dataSource == null || _cameraAccess == null || !_cameraAccess.IsPlaying) return false;
         if (!_hasDepth)
         {
             Debug.LogWarning("[SearchCapture] 深度がまだ取れていません");
-            return;
+            return false;
         }
 
         var capture = new CaptureData
         {
-            Query = GetQuery(),
+            Query = query,
             Image = CaptureCameraImage(),
         };
         BuildPoints(capture);
 
         Debug.Log($"[SearchCapture] query={capture.Query} image={capture.Image.width}x{capture.Image.height} points={capture.Points.Length}");
         _dataSource.SetCapture(capture);
-    }
-
-    string GetQuery()
-    {
-        if (_queryInputField != null && !string.IsNullOrWhiteSpace(_queryInputField.text))
-        {
-            return _queryInputField.text.Trim();
-        }
-        return _defaultQuery;
+        return true;
     }
 
     // カメラのテクスチャ（GPU上）をCPUから読めるTexture2Dへ写す。

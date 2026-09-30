@@ -72,7 +72,7 @@ class Sam3Client:
         scores = _read_scores(outputs)
         mask_files = outputs[MASK_OUTPUT]["images"]
         if len(scores) != len(mask_files):
-            raise RuntimeError(f"マスク{len(mask_files)}枚に対してスコアが{len(scores)}件です")
+            raise RuntimeError(f"got {len(mask_files)} masks but {len(scores)} scores")
 
         detections = []
         for score, mask_file in zip(scores, mask_files):
@@ -125,11 +125,11 @@ class Sam3Client:
             if entry is not None:
                 status = entry.get("status") or {}
                 if status.get("status_str") == "error":
-                    raise RuntimeError(f"ComfyUIの実行に失敗しました: {_error_summary(status)}")
+                    raise RuntimeError(f"ComfyUI execution failed: {_error_summary(status)}")
                 if status.get("completed"):
                     return entry.get("outputs") or {}
             await asyncio.sleep(0.25)
-        raise TimeoutError(f"ComfyUIが{self.settings.timeout_seconds}秒以内に終わりませんでした")
+        raise TimeoutError(f"ComfyUI did not finish within {self.settings.timeout_seconds} seconds")
 
     async def _fetch_image(self, file: dict) -> bytes:
         query = urlencode({
@@ -155,10 +155,10 @@ def _sam3_prompt(query: str, max_detections: int) -> str:
     """SAM3のプロンプトは「label:N」で最大N個を探す。:N を付けないと1個しか返さない。"""
     label = query.strip()
     if not label:
-        raise ValueError("検索語が空です")
+        raise ValueError("query is empty")
     # , と : はSAM3のプロンプト記法で意味を持つので、検索語には使えない。
     if "," in label or ":" in label:
-        raise ValueError("検索語に , と : は使えません")
+        raise ValueError("query must not contain ',' or ':'")
     return f"{label}:{max_detections}"
 
 
@@ -175,7 +175,7 @@ def _error_summary(status: dict) -> str:
     for name, detail in status.get("messages") or []:
         if name == "execution_error":
             return f"{detail.get('node_type')}: {detail.get('exception_message')}"
-    return "原因不明"
+    return "unknown error"
 
 
 def _multipart_image(png: bytes, filename: str) -> tuple[bytes, str]:

@@ -16,7 +16,7 @@ public class SearchResultView : MonoBehaviour
     [SerializeField] Color _color = new Color(1f, 0f, 1f, 1f);
     [SerializeField, Min(1f)] float _pointSize = 6f;
 
-    [Tooltip("結果の文字表示（任意）")]
+    [Tooltip("検索中・結果の文字表示（任意）。日本語フォントが無いので表示文は英語")]
     [SerializeField] TMP_Text _statusText;
 
     MeshRenderer _meshRenderer;
@@ -39,7 +39,7 @@ public class SearchResultView : MonoBehaviour
         _meshRenderer.enabled = false;
 
         dataSource.CaptureObservable
-            .Subscribe(capture => SetStatus($"「{capture.Query}」を検索中..."))
+            .Subscribe(capture => SetStatus($"Searching \"{capture.Query}\"..."))
             .AddTo(this);
 
         dataSource.ResultObservable
@@ -56,7 +56,7 @@ public class SearchResultView : MonoBehaviour
         if (!result.IsSuccess)
         {
             _meshRenderer.enabled = false;
-            SetStatus($"「{query}」エラー: {result.Error}");
+            SetStatus($"Error: {result.Error}");
             return;
         }
 
@@ -66,13 +66,14 @@ public class SearchResultView : MonoBehaviour
         if (positions.Count == 0)
         {
             _meshRenderer.enabled = false;
-            SetStatus($"「{query}」は見つかりませんでした");
+            SetStatus($"\"{query}\" was not found");
             return;
         }
 
-        // 点はワールド座標なので、このオブジェクト自体は原点に置く。
-        transform.SetPositionAndRotation(Vector3.zero, Quaternion.identity);
-        transform.localScale = Vector3.one;
+        // 点はワールド座標なので、このオブジェクトのローカル座標へ直してから描く。
+        // こうしておけば、親（Logic など）の位置やスケールに関係なく正しい場所に出る。
+        var worldToLocal = transform.worldToLocalMatrix;
+        for (var i = 0; i < positions.Count; i++) positions[i] = worldToLocal.MultiplyPoint3x4(positions[i]);
 
         var indices = new int[positions.Count];
         for (var i = 0; i < indices.Length; i++) indices[i] = i;
@@ -83,7 +84,7 @@ public class SearchResultView : MonoBehaviour
         _mesh.RecalculateBounds();
         _meshRenderer.enabled = true;
 
-        SetStatus($"「{query}」が {result.Detections.Count} 個見つかりました");
+        SetStatus($"Found {result.Detections.Count} \"{query}\"");
     }
 
     // どれかのマスクの白い部分に写っていた点を集める。

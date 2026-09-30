@@ -8,9 +8,6 @@ using WebSocketSharpUtl;
 [RequireComponent(typeof(WebSocketClientManager))]
 public class SearchClient : MonoBehaviour
 {
-    [Header("Server")]
-    [Tooltip("Pythonサーバーを動かしているPCのIPアドレス")]
-    [SerializeField] string _serverIp = "192.168.0.10";
     [SerializeField] int _serverPort = 8765;
 
     SpatialSearchDataSource _dataSource;
@@ -30,17 +27,32 @@ public class SearchClient : MonoBehaviour
             .Subscribe(OnMessage)
             .AddTo(this);
 
+        Observable.FromEvent(h => _webSocket.OnConnected += h, h => _webSocket.OnConnected -= h)
+            .ObserveOnMainThread()
+            .Subscribe(_ => _dataSource.SetConnected(true))
+            .AddTo(this);
+
+        // 接続に失敗したときも OnDisconnected が来る。
         Observable.FromEvent<string>(h => _webSocket.OnDisconnected += h, h => _webSocket.OnDisconnected -= h)
             .ObserveOnMainThread()
-            .Subscribe(_ => Fail("サーバーとの接続が切れました"))
+            .Subscribe(_ =>
+            {
+                _dataSource.SetConnected(false);
+                Fail("Disconnected from the server");
+            })
             .AddTo(this);
 
         _dataSource.CaptureObservable
             .Subscribe(Send)
             .AddTo(this);
+    }
 
-        var url = $"ws://{_serverIp}:{_serverPort}/";
+    // 指定したIPのサーバーへ接続する。接続中なら切断してから繋ぎ直す。
+    public void Connect(string serverIp)
+    {
+        var url = $"ws://{serverIp}:{_serverPort}/";
         Debug.Log($"[SearchClient] connecting to {url}");
+        _webSocket.Disconnect();
         _webSocket.Connect(url);
     }
 
@@ -53,7 +65,7 @@ public class SearchClient : MonoBehaviour
         }
         if (!_webSocket.IsConnected)
         {
-            Debug.LogWarning("[SearchClient] サーバーに接続していません。再接続します");
+            _dataSource.SetResult(new SearchResult { Capture = capture, Error = "Not connected to the server" });
             _webSocket.ReConnect();
             return;
         }
@@ -82,7 +94,7 @@ public class SearchClient : MonoBehaviour
         }
         catch (Exception e)
         {
-            Fail("サーバーの応答を読めませんでした: " + e.Message);
+            Fail("Invalid response from the server: " + e.Message);
             return;
         }
 

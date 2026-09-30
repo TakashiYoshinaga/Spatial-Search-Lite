@@ -5,7 +5,7 @@ Unityから画像と検索語を受け取り、ComfyUIのSAM3で物体を探し�
 Unity → サーバー
     {"type": "search", "query": "monitor", "image": "<PNGのbase64>"}
 
-サーバー → Unity
+サーバー → Unity（message は英語。Quest側に日本語フォントが無いため）
     {"type": "result", "query": "monitor", "detections": [{"score": 0.93, "mask": "<PNGのbase64>"}, ...]}
     {"type": "error", "message": "理由"}
 

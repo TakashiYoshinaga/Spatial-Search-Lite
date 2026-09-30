@@ -131,6 +131,13 @@ namespace WebSocketSharpUtl{
             }
         }
 
+        // サーバーから切断するメソッド
+        // 別のURLへ接続し直すときは、これを呼んでからConnectする
+        public void Disconnect()
+        {
+            CloseWebSocket();
+        }
+
         // アプリケーション終了時に自動的に呼ばれるメソッド
         void OnApplicationQuit()
         {
