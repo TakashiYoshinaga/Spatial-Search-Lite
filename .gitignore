@@ -1,0 +1,57 @@
+# ---- Unity (UnityMetaQuest/) ----
+UnityMetaQuest/[Ll]ibrary/
+UnityMetaQuest/[Tt]emp/
+UnityMetaQuest/[Oo]bj/
+UnityMetaQuest/[Bb]uild/
+UnityMetaQuest/[Bb]uilds/
+UnityMetaQuest/[Ll]ogs/
+UnityMetaQuest/[Uu]ser[Ss]ettings/
+UnityMetaQuest/[Mm]emoryCaptures/
+UnityMetaQuest/[Rr]ecordings/
+UnityMetaQuest/Assets/Plugins/Editor/JetBrains*
+UnityMetaQuest/Assets/[Ss]ceneDependencyCache*
+UnityMetaQuest/Assets/Unity.VisualScripting.Generated/VisualScripting.Flow/UnitOptions.db*
+UnityMetaQuest/Assets/Unity.VisualScripting.Generated/VisualScripting.Core/Property Providers*
+.utmp/
+*.log
+*.blend1
+*.blend1.meta
+
+UnityMetaQuest/*_BurstDebugInformation_DoNotShip/
+
+# IDE / generated project files
+.vs/
+.vscode/
+.idea/
+.gradle/
+*.csproj
+*.sln
+*.slnx
+*.suo
+*.user
+*.userprefs
+*.pidb
+*.pdb
+*.mdb
+*.opendb
+*.VC.db
+*.DotSettings.user
+mono_crash.*
+sysinfo.txt
+crashlytics-build.properties
+
+# Builds
+*.apk
+*.aab
+*.unitypackage
+*.unitypackage.meta
+*.app
+
+# ---- Python (server/) ----
+__pycache__/
+*.py[cod]
+.venv/
+
+# OS
+.DS_Store
+Thumbs.db

@@ -1,0 +1,12 @@
+{
+    "name": "com.yoshinaga.websocketsharputl",
+    "displayName": "WebSocketSharpUtl",
+    "author": { "name": "yoshinaga" },
+    "version": "1.0.0",
+    "unity": "2018.4",
+    "description": "This package is including WebsocketSharp",
+    "keywords": [ ],
+    "license": "MIT",
+    "category": "",
+    "dependencies": {}
+}
