@@ -2,18 +2,24 @@ Shader "SpatialSearch/URP/Colored Points"
 {
     Properties
     {
-        _PointScale ("Point Scale", Float) = 1.5
-        _MinPixelSize ("Min Pixel Size", Float) = 2.0
-        _MaxPixelSize ("Max Pixel Size", Float) = 32.0
+        _CameraTexture ("Camera Image", 2D) = "white" {}
         _DepthTolerance ("Depth Tolerance", Float) = 2.0
         _TintColor ("Tint Color (A = strength)", Color) = (1, 1, 1, 0)
     }
 
-    // 点群は2パスで描く。
-    //   1パス目 : 奥行きだけを、点の大きさ × _DepthTolerance ぶん奥へずらして書く
-    //   2パス目 : 色を奥行きを書かずに描く。手前の面の点はどれも奥行きテストに通り、頂点の順に上書きされる
-    // 1パスで奥行きを書くと、重なった点のどちらが手前になるかが頭のわずかな動きで入れ替わり、色がちらつく。
-    // 2パスにすると重なりの色が毎フレーム同じになり、物体の後ろにある点はきちんと隠れる。
+    // 見つかった物体を、点ごとの四角形（深度1画素ぶん）に撮影したカメラ画像を貼って描く。
+    // 頂点のUV（uv0）が、その四隅がカメラ画像のどこに写っていたか（SearchResultMeshBuilder が作る）。
+    // 四角形の中は画素ごとに画像を引くので、点ごとに1色を割り当てるのと違い、粗いドットにならない。
+    //
+    // 頂点の位置は点の中心で、uv1 が中心から四隅への「画面の右・上へのずらし量」（m）。
+    // 視点から見た空間でずらすので、四角形は常に視点に正対する（ビルボード）。
+    // 四隅とUVの対応は撮影したままなので、撮影した向きから見るとぴったり合い、傾けると合わなくなる。
+    //
+    // 板は重なるので、2パスで描く。
+    //   1パス目 : 奥行きだけを、板の大きさ × _DepthTolerance ぶん奥へずらして書く
+    //   2パス目 : 色を奥行きを書かずに描く。手前の面の板はどれも奥行きテストに通り、頂点の順に上書きされる
+    // 1パスで奥行きを書くと、重なった板のどちらが手前になるかが頭のわずかな動きで入れ替わり、色がちらつく。
+    // 2パスにすると重なりの色が毎フレーム同じになり、物体の後ろにある板はきちんと隠れる。
     SubShader
     {
         Tags
@@ -25,44 +31,36 @@ Shader "SpatialSearch/URP/Colored Points"
 
         HLSLINCLUDE
         #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
-        #include "Packages/com.unity.render-pipelines.core/ShaderLibrary/Color.hlsl"
+
+        TEXTURE2D(_CameraTexture);
+        SAMPLER(sampler_CameraTexture);
 
         CBUFFER_START(UnityPerMaterial)
-        float _PointScale;
-        float _MinPixelSize;
-        float _MaxPixelSize;
         float _DepthTolerance;
         half4 _TintColor;
         CBUFFER_END
 
         struct Attributes
         {
-            float3 positionOS : POSITION;
-            half4 color : COLOR;
-            float2 size : TEXCOORD0; // x = 撮影したときの点の間隔（オブジェクト空間のm）
+            float3 positionOS : POSITION; // 点の中心
+            float2 uv : TEXCOORD0;        // この四隅のカメラ画像上のUV
+            float2 corner : TEXCOORD1;    // 中心から四隅への、画面の右・上へのずらし量（オブジェクト空間のm）
             UNITY_VERTEX_INPUT_INSTANCE_ID
         };
 
-        // 点の大きさ（ワールド空間のm）= 撮影したときの点の間隔 × _PointScale（1より大きくして隙間を埋める）
-        float PointSizeWS(Attributes input)
+        // オブジェクトの拡大率。両手で拡大縮小したとき、四角形の大きさも一緒に変える。
+        float ObjectScale()
         {
-            float objectScale = length(GetObjectToWorldMatrix()._m00_m10_m20);
-            return input.size.x * objectScale * _PointScale;
+            return length(GetObjectToWorldMatrix()._m00_m10_m20);
         }
 
-        // 点の大きさを画面上のピクセル数へ直す。どの距離から見ても、顔に近づけても隙間ができない。
-        // マルチビュー描画では目ごとに変えてよいのは位置だけなので、左目の行列で計算して両目で同じ値にする。
-        float PointPixelSize(float3 positionWS, float sizeWS)
+        // 点の中心を視点から見た空間へ移し、四隅のぶんだけ画面の右・上へずらす。
+        // 目ごとのビュー行列で計算するので、両目それぞれに正対する。
+        float3 BillboardPositionVS(Attributes input, float objectScale)
         {
-        #if defined(USING_STEREO_MATRICES)
-            float w = mul(unity_StereoMatrixVP[0], float4(positionWS, 1.0)).w;
-            float focal = abs(unity_StereoMatrixP[0]._m11);
-        #else
-            float w = mul(UNITY_MATRIX_VP, float4(positionWS, 1.0)).w;
-            float focal = abs(UNITY_MATRIX_P._m11);
-        #endif
-            float pixels = sizeWS * focal * _ScaledScreenParams.y * 0.5 / max(w, 1e-4);
-            return clamp(pixels, _MinPixelSize, _MaxPixelSize);
+            float3 positionVS = TransformWorldToView(TransformObjectToWorld(input.positionOS));
+            positionVS.xy += input.corner * objectScale;
+            return positionVS;
         }
         ENDHLSL
 
@@ -86,7 +84,6 @@ Shader "SpatialSearch/URP/Colored Points"
             struct Varyings
             {
                 float4 positionCS : SV_POSITION;
-                float pointSize : PSIZE;
                 UNITY_VERTEX_OUTPUT_STEREO
             };
 
@@ -97,13 +94,13 @@ Shader "SpatialSearch/URP/Colored Points"
                 Varyings output;
                 UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(output);
 
-                float3 positionWS = TransformObjectToWorld(input.positionOS);
-                float sizeWS = PointSizeWS(input);
-                output.pointSize = PointPixelSize(positionWS, sizeWS);
+                float objectScale = ObjectScale();
+                float3 positionVS = BillboardPositionVS(input, objectScale);
 
-                // 目から見て奥へずらす。この範囲にある点は、2パス目で同じ面の点として色が描かれる。
-                float3 viewDirection = normalize(positionWS - GetCameraPositionWS());
-                output.positionCS = TransformWorldToHClip(positionWS + viewDirection * sizeWS * _DepthTolerance);
+                // 目から見て奥へずらす。この範囲にある板は、2パス目で同じ面の板として色が描かれる。
+                float sizeWS = max(abs(input.corner.x), abs(input.corner.y)) * 2.0 * objectScale;
+                positionVS += normalize(positionVS) * sizeWS * _DepthTolerance;
+                output.positionCS = TransformWViewToHClip(positionVS);
 
                 return output;
             }
@@ -134,8 +131,7 @@ Shader "SpatialSearch/URP/Colored Points"
             struct Varyings
             {
                 float4 positionCS : SV_POSITION;
-                half4 color : COLOR;
-                float pointSize : PSIZE;
+                float2 uv : TEXCOORD0;
                 UNITY_VERTEX_OUTPUT_STEREO
             };
 
@@ -146,25 +142,21 @@ Shader "SpatialSearch/URP/Colored Points"
                 Varyings output;
                 UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(output);
 
-                float3 positionWS = TransformObjectToWorld(input.positionOS);
-                output.positionCS = TransformWorldToHClip(positionWS);
-                output.pointSize = PointPixelSize(positionWS, PointSizeWS(input));
-
-                // 頂点カラーにはカメラ画像の色が sRGB のまま入っているので、Linear へ直す。
-                half3 color = input.color.rgb;
-                #if !defined(UNITY_COLORSPACE_GAMMA)
-                color = SRGBToLinear(color);
-                #endif
-
-                // コントローラが近づいた・つかんだときの色付け（InteractableColorVisual が _TintColor を変える）。
-                output.color = half4(lerp(color, _TintColor.rgb, _TintColor.a), 1.0);
+                output.positionCS = TransformWViewToHClip(BillboardPositionVS(input, ObjectScale()));
+                output.uv = input.uv;
 
                 return output;
             }
 
             half4 Frag(Varyings input) : SV_Target
             {
-                return input.color;
+                // テクスチャはsRGBで作ってあるので、Linearの色空間ではサンプルした時点でLinearになる。
+                half3 color = SAMPLE_TEXTURE2D(_CameraTexture, sampler_CameraTexture, input.uv).rgb;
+
+                // コントローラが近づいた・つかんだときの色付け（InteractableColorVisual が _TintColor を変える）。
+                color = lerp(color, _TintColor.rgb, _TintColor.a);
+
+                return half4(color, 1.0);
             }
             ENDHLSL
         }

@@ -126,6 +126,7 @@ public class SearchResultView : SearchResultViewBase
         {
             Destroy(detection.Mask);
         }
+        Destroy(_shownResult.Capture.Image);
         _shownResult = null;
     }
 

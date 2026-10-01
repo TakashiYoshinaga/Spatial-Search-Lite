@@ -6,12 +6,15 @@ using UnityEngine;
 using UnityEngine.Rendering;
 
 // 結果を表示するクラス（つかめる版）。
-// 見つかった物体ごとに _objectTemplate を複製し、マスクに写っていた点をカメラ画像の色で描く。
+// 見つかった物体ごとに _objectTemplate を複製し、マスクに写っていた点を、撮影したカメラ画像を貼った四角形で表示する。
+// 四角形は点ごとにあり、シェーダーが常にこちらを向ける（ビルボード）。
 // つかむための設定（Grabbable / GrabInteractable など）はひな形のプレハブに付けてあるので、
-// このクラスは点群のメッシュを作り、つかめる範囲（BoxCollider）を点群に合わせるだけ。
+// このクラスは四角形のメッシュを作り、つかめる範囲（BoxCollider）を物体に合わせるだけ。
 public class GrabbableSearchResultView : SearchResultViewBase
 {
-    [Tooltip("物体1つぶんの点群のひな形（Assets/Prefabs/GrabbableSearchResult.prefab）")]
+    static readonly int CameraTextureId = Shader.PropertyToID("_CameraTexture");
+
+    [Tooltip("物体1つぶんのひな形（Assets/Prefabs/GrabbableSearchResult.prefab）")]
     [SerializeField] MeshFilter _objectTemplate;
 
     [Tooltip("つかめる範囲の箱を決めるとき、各軸の両端から外す点の割合。マスクの縁で拾った背景の点で箱が広がりすぎないようにする")]
@@ -25,6 +28,7 @@ public class GrabbableSearchResultView : SearchResultViewBase
 
     readonly List<GameObject> _objects = new List<GameObject>();
     readonly List<Mesh> _meshes = new List<Mesh>();
+    Material _resultMaterial;
     SearchResult _shownResult;
 
     public override void Initialize(SpatialSearchDataSource dataSource)
@@ -55,29 +59,29 @@ public class GrabbableSearchResultView : SearchResultViewBase
             return;
         }
 
-        // 物体ごとに点を集める。複数のマスクに写った点は、先に見つかった物体へ入れる。
+        // 物体はどれも同じカメラ画像を貼る。ひな形のマテリアルは共有なので、画像を渡すために複製して使う。
         var capture = result.Capture;
+        _resultMaterial = new Material(_objectTemplate.GetComponent<MeshRenderer>().sharedMaterial);
+        _resultMaterial.SetTexture(CameraTextureId, capture.Image);
+
+        // 物体ごとに点を集める。複数のマスクに写った点は、先に見つかった物体へ入れる。
         var used = new bool[capture.Points.Length];
         foreach (var detection in result.Detections)
         {
-            var positions = new List<Vector3>();
-            var colors = new List<Color32>();
-            var sizes = new List<Vector2>();
-            CollectPointsInMask(capture, detection.Mask, used, positions, colors, sizes);
-            if (positions.Count == 0) continue;
+            var pointIndices = CollectPointsInMask(capture, detection.Mask, used);
+            if (pointIndices.Count == 0) continue;
 
-            CreateObject($"{query} {_objects.Count + 1}", positions, colors, sizes);
+            CreateObject($"{query} {_objects.Count + 1}", capture, pointIndices);
         }
 
         Debug.Log($"[GrabbableSearchResultView] query={query} detections={result.Detections.Count} objects={_objects.Count}");
         SetStatus(_objects.Count == 0 ? $"\"{query}\" was not found" : $"Found {_objects.Count} \"{query}\"");
     }
 
-    // マスクの白い部分に写っていた点と、その色・大きさを集める。
-    // 大きさはシェーダーへ UV の x で渡すので Vector2 にしておく。
-    static void CollectPointsInMask(CaptureData capture, Texture2D mask, bool[] used,
-        List<Vector3> positions, List<Color32> colors, List<Vector2> sizes)
+    // マスクの白い部分に写っていた点の番号（capture.Points の添字）を集める。
+    static List<int> CollectPointsInMask(CaptureData capture, Texture2D mask, bool[] used)
     {
+        var indices = new List<int>();
         var pixels = mask.GetPixels32(); // 左下から右へ、下の行から順に並ぶ
         for (var i = 0; i < capture.Points.Length; i++)
         {
@@ -89,39 +93,53 @@ public class GrabbableSearchResultView : SearchResultViewBase
             if (pixels[y * mask.width + x].r < 128) continue;
 
             used[i] = true;
-            positions.Add(capture.Points[i]);
-            colors.Add(capture.Colors[i]);
-            sizes.Add(new Vector2(capture.PointSizes[i], 0f));
+            indices.Add(i);
         }
+        return indices;
     }
 
-    // 点群を持った物体を1つ作る。点群の中心に置き、つかめる範囲の箱を点群に合わせる。
-    void CreateObject(string objectName, List<Vector3> positions, List<Color32> colors, List<Vector2> sizes)
+    // 四角形を持った物体を1つ作る。物体の中心に置き、つかめる範囲の箱を物体に合わせる。
+    void CreateObject(string objectName, CaptureData capture, List<int> pointIndices)
     {
-        var bounds = TrimmedBounds(positions, _outlierRatio);
+        // つかめる範囲は点の中心で決める。
+        var centers = new List<Vector3>(pointIndices.Count);
+        foreach (var point in pointIndices) centers.Add(capture.Points[point]);
+        var bounds = TrimmedBounds(centers, _outlierRatio);
 
         var filter = Instantiate(_objectTemplate, bounds.center, Quaternion.identity, transform);
         filter.name = objectName;
+        filter.GetComponent<MeshRenderer>().sharedMaterial = _resultMaterial;
 
-        // 点の位置と大きさはワールドの値なので、作った物体のローカルの値へ直す。
-        // こうしておくと、両手で拡大縮小したときに点の大きさも一緒に変わる。
+        // 点ごとの四角形にする。頂点にはカメラ画像のUV（uv0）と、中心から四隅へのずらし量（uv1）を持たせる。
+        var positions = new List<Vector3>(pointIndices.Count * 4);
+        var uvs = new List<Vector2>(pointIndices.Count * 4);
+        var cornerSizes = new List<Vector2>(pointIndices.Count * 4);
+        var triangles = new List<int>(pointIndices.Count * 6);
+        SearchResultMeshBuilder.Build(capture, pointIndices, positions, uvs, cornerSizes, triangles);
+
+        // 頂点の位置と四隅のずらし量はワールドの値なので、作った物体のローカルの値へ直す。
+        // こうしておくと、両手で拡大縮小したときに四角形の大きさも一緒に変わる。
         var worldToLocal = filter.transform.worldToLocalMatrix;
         var worldToLocalScale = worldToLocal.MultiplyVector(Vector3.right).magnitude;
+        var maxCornerSize = 0f;
         for (var i = 0; i < positions.Count; i++)
         {
             positions[i] = worldToLocal.MultiplyPoint3x4(positions[i]);
-            sizes[i] *= worldToLocalScale;
+            cornerSizes[i] *= worldToLocalScale;
+            maxCornerSize = Mathf.Max(maxCornerSize, Mathf.Abs(cornerSizes[i].x), Mathf.Abs(cornerSizes[i].y));
         }
-
-        var indices = new int[positions.Count];
-        for (var i = 0; i < indices.Length; i++) indices[i] = i;
 
         var mesh = new Mesh { name = objectName, indexFormat = IndexFormat.UInt32 };
         mesh.SetVertices(positions);
-        mesh.SetColors(colors);
-        mesh.SetUVs(0, sizes);
-        mesh.SetIndices(indices, MeshTopology.Points, 0);
+        mesh.SetUVs(0, uvs);
+        mesh.SetUVs(1, cornerSizes);
+        mesh.SetTriangles(triangles, 0);
         mesh.RecalculateBounds();
+
+        // 頂点は点の中心にあるので、四角形がはみ出ても画面の端で消えないよう、範囲を四角形の大きさぶん広げる。
+        var meshBounds = mesh.bounds;
+        meshBounds.Expand(maxCornerSize * 4f);
+        mesh.bounds = meshBounds;
         filter.sharedMesh = mesh;
 
         if (filter.TryGetComponent<BoxCollider>(out var box))
@@ -178,11 +196,15 @@ public class GrabbableSearchResultView : SearchResultViewBase
         foreach (var mesh in _meshes) Destroy(mesh);
         _meshes.Clear();
 
+        if (_resultMaterial != null) Destroy(_resultMaterial);
+        _resultMaterial = null;
+
         if (_shownResult == null) return;
         foreach (var detection in _shownResult.Detections)
         {
             Destroy(detection.Mask);
         }
+        Destroy(_shownResult.Capture.Image);
         _shownResult = null;
     }
 

@@ -61,6 +61,7 @@ public class SearchClient : MonoBehaviour
         if (_pending != null)
         {
             Debug.LogWarning("[SearchClient] 前の検索の結果待ちなので無視します");
+            Destroy(capture.Image); // 結果にならない撮影の画像は、誰も使わないのでここで捨てる
             return;
         }
         if (!_webSocket.IsConnected)

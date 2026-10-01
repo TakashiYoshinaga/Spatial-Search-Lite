@@ -22,12 +22,14 @@ Material:
   m_LockedProperties: 
   m_SavedProperties:
     serializedVersion: 3
-    m_TexEnvs: []
+    m_TexEnvs:
+    - _CameraTexture:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
     m_Ints: []
     m_Floats:
-    - _MaxPixelSize: 32
-    - _MinPixelSize: 2
-    - _PointSize: 0.006
+    - _DepthTolerance: 2
     m_Colors:
     - _TintColor: {r: 1, g: 1, b: 1, a: 0}
   m_BuildTextureStacks: []
