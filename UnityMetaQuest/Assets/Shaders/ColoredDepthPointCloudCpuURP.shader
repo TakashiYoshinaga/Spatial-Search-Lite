@@ -4,7 +4,6 @@ Shader "TryAR/URP/Colored Depth Point Cloud CPU"
     {
         _CameraTexture ("Camera Texture", 2D) = "black" {}
         _PointAlpha ("Point Alpha", Range(0, 1)) = 0.9
-        _PointSize ("Point Size", Float) = 2.0
         _DepthRange ("Depth Range", Vector) = (0.1, 5.0, 0.0, 0.0)
     }
 
@@ -23,7 +22,7 @@ Shader "TryAR/URP/Colored Depth Point Cloud CPU"
             Tags { "LightMode" = "UniversalForward" }
 
             Blend SrcAlpha OneMinusSrcAlpha
-            ZWrite Off
+            ZWrite On
             ZTest LEqual
             Cull Off
 
@@ -41,7 +40,6 @@ Shader "TryAR/URP/Colored Depth Point Cloud CPU"
 
             CBUFFER_START(UnityPerMaterial)
             float _PointAlpha;
-            float _PointSize;
             float4 _DepthRange;
             float4x4 _InverseLocalReprojection;
             float4x4 _ColorCameraWorldToLocal;
@@ -50,6 +48,8 @@ Shader "TryAR/URP/Colored Depth Point Cloud CPU"
             float4 _ColorSensorCropRect;
             CBUFFER_END
 
+            // Each depth pixel is drawn as a quad covering its footprint (see DepthPointCloudMeshUtility.BuildQuadMesh).
+            // Vertex index = pixel index * 4 + corner, and uv is the depth-texture uv of that corner.
             struct Attributes
             {
                 float3 positionOS : POSITION;
@@ -61,9 +61,10 @@ Shader "TryAR/URP/Colored Depth Point Cloud CPU"
             struct Varyings
             {
                 float4 positionCS : SV_POSITION;
-                float2 cameraUv : TEXCOORD0;
-                float pointSize : PSIZE;
-                float valid : TEXCOORD1;
+                // Corner position in color sensor pixels, still multiplied by its camera-space depth: (sensor.xy * z, z).
+                // The rasterizer interpolates it perspective-correctly across the quad and Frag divides by z, which gives
+                // the exact camera uv of every pixel in the quad and not just the corners.
+                float3 cameraProjective : TEXCOORD0;
                 UNITY_VERTEX_OUTPUT_STEREO
             };
 
@@ -77,11 +78,12 @@ Shader "TryAR/URP/Colored Depth Point Cloud CPU"
                 return IsFiniteValue(value.x) && IsFiniteValue(value.y) && IsFiniteValue(value.z);
             }
 
-            bool TryReconstructLocalPosition(float2 uv, uint vertexID, out float3 localPosition)
+            // All 4 corners share the depth of their pixel, so the quad is a flat patch facing the depth camera.
+            // Neighboring quads then tile the depth image without gaps when seen from the depth camera.
+            bool TryReconstructLocalPosition(float2 uv, float linearDepth, out float3 localPosition)
             {
                 localPosition = 0.0;
 
-                float linearDepth = _LinearDepthBuffer[vertexID];
                 if (linearDepth < _DepthRange.x || linearDepth > _DepthRange.y || !IsFiniteValue(linearDepth))
                 {
                     return false;
@@ -104,22 +106,6 @@ Shader "TryAR/URP/Colored Depth Point Cloud CPU"
                 return IsFiniteFloat3(localPosition);
             }
 
-            bool TryProjectCameraUv(float3 worldPosition, out float2 cameraUv)
-            {
-                cameraUv = 0.0;
-                float3 cameraPosition = mul(_ColorCameraWorldToLocal, float4(worldPosition, 1.0)).xyz;
-                if (!IsFiniteFloat3(cameraPosition) || cameraPosition.z <= 1e-5)
-                {
-                    return false;
-                }
-
-                float2 sensorPoint = (cameraPosition.xy / cameraPosition.z) * _ColorFocalLength.xy
-                    + _ColorPrincipalPoint.xy;
-                cameraUv = (sensorPoint - _ColorSensorCropRect.xy) / _ColorSensorCropRect.zw;
-
-                return all(cameraUv >= 0.0) && all(cameraUv <= 1.0);
-            }
-
             Varyings Vert(Attributes input)
             {
                 UNITY_SETUP_INSTANCE_ID(input);
@@ -127,19 +113,23 @@ Shader "TryAR/URP/Colored Depth Point Cloud CPU"
                 Varyings output;
                 UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(output);
 
-                float3 localPosition;
-                bool isValid = TryReconstructLocalPosition(input.uv, input.vertexID, localPosition);
+                float linearDepth = _LinearDepthBuffer[input.vertexID >> 2];
 
-                float2 cameraUv = 0.0;
+                float3 localPosition;
+                bool isValid = TryReconstructLocalPosition(input.uv, linearDepth, localPosition);
+
+                float3 cameraProjective = 0.0;
                 if (isValid)
                 {
                     float3 worldPosition = TransformObjectToWorld(localPosition);
-                    isValid = TryProjectCameraUv(worldPosition, cameraUv);
+                    float3 cameraPosition = mul(_ColorCameraWorldToLocal, float4(worldPosition, 1.0)).xyz;
+                    cameraProjective = float3(
+                        cameraPosition.xy * _ColorFocalLength.xy + _ColorPrincipalPoint.xy * cameraPosition.z,
+                        cameraPosition.z);
                 }
 
-                output.cameraUv = cameraUv;
-                output.valid = isValid ? 1.0 : 0.0;
-                output.pointSize = isValid ? _PointSize : 0.0;
+                // The 4 corners of an invalid pixel all collapse to one point, so the quad has no area and is never rasterized.
+                output.cameraProjective = cameraProjective;
                 output.positionCS = isValid
                     ? TransformObjectToHClip(localPosition)
                     : float4(0.0, 0.0, 0.0, 1.0);
@@ -149,8 +139,16 @@ Shader "TryAR/URP/Colored Depth Point Cloud CPU"
 
             half4 Frag(Varyings input) : SV_Target
             {
-                clip(input.valid - 0.5);
-                half4 cameraColor = SAMPLE_TEXTURE2D(_CameraTexture, sampler_CameraTexture, input.cameraUv);
+                // Behind the color camera.
+                clip(input.cameraProjective.z - 1e-5);
+
+                float2 sensorPoint = input.cameraProjective.xy / input.cameraProjective.z;
+                float2 cameraUv = (sensorPoint - _ColorSensorCropRect.xy) / _ColorSensorCropRect.zw;
+
+                // Outside the color image. Cut per pixel, so the edge of the image is not quantized to depth pixels.
+                clip(min(cameraUv, 1.0 - cameraUv));
+
+                half4 cameraColor = SAMPLE_TEXTURE2D(_CameraTexture, sampler_CameraTexture, cameraUv);
                 cameraColor.a *= _PointAlpha;
                 return cameraColor;
             }

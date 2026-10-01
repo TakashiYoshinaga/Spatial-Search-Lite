@@ -4,12 +4,13 @@ using UnityEngine;
 using UnityEngine.Rendering;
 
 // ScanApp-specific CPU depth visualizer that projects the passthrough camera image onto the point cloud.
+// Every depth pixel is drawn as a quad whose 4 corners are projected into the camera image, so each pixel shows
+// a patch of the image instead of one flat color.
 // It intentionally remains separate from DepthVisualizerCpu so the shared depth samples keep their behavior.
 [RequireComponent(typeof(MeshRenderer), typeof(MeshFilter))]
 public class ColoredDepthVisualizerCpu : MonoBehaviour
 {
     private static readonly int PointAlphaId = Shader.PropertyToID("_PointAlpha");
-    private static readonly int PointSizeId = Shader.PropertyToID("_PointSize");
     private static readonly int DepthRangeId = Shader.PropertyToID("_DepthRange");
     private static readonly int InverseLocalReprojectionId = Shader.PropertyToID("_InverseLocalReprojection");
     private static readonly int LinearDepthBufferId = Shader.PropertyToID("_LinearDepthBuffer");
@@ -26,7 +27,6 @@ public class ColoredDepthVisualizerCpu : MonoBehaviour
 
     [Header("Rendering")]
     [SerializeField, Range(0f, 1f)] private float _pointAlpha = 0.9f;
-    [SerializeField, Min(1f)] private float _pointSize = 2f;
     [SerializeField, Min(0f)] private float _minDepthMeters = 0.1f;
     [SerializeField, Min(0.01f)] private float _maxDepthMeters = 5f;
 
@@ -278,7 +278,7 @@ public class ColoredDepthVisualizerCpu : MonoBehaviour
 
         if (_pointMesh == null || _meshTextureSize != textureSize)
         {
-            _pointMesh = DepthPointCloudMeshUtility.BuildPointMesh(_pointMesh, textureSize);
+            _pointMesh = DepthPointCloudMeshUtility.BuildQuadMesh(_pointMesh, textureSize);
             _meshTextureSize = textureSize;
             _meshFilter.sharedMesh = _pointMesh;
             DepthPointCloudMeshUtility.UpdateBounds(_pointMesh, _maxDepthMeters);
@@ -328,7 +328,6 @@ public class ColoredDepthVisualizerCpu : MonoBehaviour
         }
 
         _runtimeMaterial.SetFloat(PointAlphaId, _pointAlpha);
-        _runtimeMaterial.SetFloat(PointSizeId, _pointSize);
         _runtimeMaterial.SetVector(DepthRangeId, new Vector4(_minDepthMeters, _maxDepthMeters, 0f, 0f));
     }
 

@@ -31,7 +31,6 @@ Material:
     m_Ints: []
     m_Floats:
     - _PointAlpha: 0.9
-    - _PointSize: 2
     m_Colors:
     - _DepthRange: {r: 0.1, g: 5, b: 0, a: 0}
   m_BuildTextureStacks: []
