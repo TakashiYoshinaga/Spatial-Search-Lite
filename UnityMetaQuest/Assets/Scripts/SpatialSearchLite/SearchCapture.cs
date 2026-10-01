@@ -126,15 +126,15 @@ public class SearchCapture : MonoBehaviour
         var textureSize = _depthAccess.TextureSize;
         PixelStepAtOneMeter(clipToDepthLocal, depthLocalToWorld, zBufferParams, textureSize, out var pixelRight, out var pixelUp);
 
-        var points = new List<Vector3>(_depth.Length);
-        var uvs = new List<Vector2>(_depth.Length);
-        var depths = new List<float>(_depth.Length);
-
+        // 深度の各画素をワールド座標へ戻す。面の向きを求めるとき隣の画素の位置を使うので、先に全部戻しておく。
+        var worlds = new Vector3[_depth.Length];
+        var hasWorld = new bool[_depth.Length];
         for (var y = 0; y < textureSize; y++)
         {
             for (var x = 0; x < textureSize; x++)
             {
-                var depth = _depth[y * textureSize + x];
+                var index = y * textureSize + x;
+                var depth = _depth[index];
                 if (!(depth >= _minDepthMeters && depth <= _maxDepthMeters)) continue; // NaNもここで弾く
 
                 // 深度テクスチャ上の位置と深度値 → ワールド座標
@@ -145,24 +145,82 @@ public class SearchCapture : MonoBehaviour
                     1f);
                 var local = clipToDepthLocal * clip;
                 if (Mathf.Abs(local.w) < 1e-5f) continue;
-                var world = depthLocalToWorld.MultiplyPoint3x4((Vector3)local / local.w);
+
+                worlds[index] = depthLocalToWorld.MultiplyPoint3x4((Vector3)local / local.w);
+                hasWorld[index] = true;
+            }
+        }
+
+        // カメラ画像に写っている画素を点にする。
+        var pixelWidthAtOneMeter = Mathf.Max(pixelRight.magnitude, pixelUp.magnitude);
+        var points = new List<Vector3>(_depth.Length);
+        var uvs = new List<Vector2>(_depth.Length);
+        var depths = new List<float>(_depth.Length);
+        var normals = new List<Vector3>(_depth.Length);
+        for (var y = 0; y < textureSize; y++)
+        {
+            for (var x = 0; x < textureSize; x++)
+            {
+                var index = y * textureSize + x;
+                if (!hasWorld[index]) continue;
 
                 // ワールド座標 → カメラ画像上のUV
+                var world = worlds[index];
                 if (!projection.TryProject(world, out var uv)) continue;
                 if (uv.x < 0f || uv.x > 1f || uv.y < 0f || uv.y > 1f) continue; // 画像に写っていない点
 
+                var depth = _depth[index];
                 points.Add(world);
                 uvs.Add(uv);
                 depths.Add(depth);
+                normals.Add(SurfaceNormal(worlds, hasWorld, textureSize, x, y,
+                    NormalStep * depth * pixelWidthAtOneMeter * NormalMaxEdgeRatio, projection.CameraPosition - world));
             }
         }
 
         capture.Points = points.ToArray();
         capture.ImageUvs = uvs.ToArray();
         capture.Depths = depths.ToArray();
+        capture.Normals = normals.ToArray();
         capture.PixelRightPerMeter = pixelRight;
         capture.PixelUpPerMeter = pixelUp;
         capture.Projection = projection;
+    }
+
+    // 面の向き（法線）を求めるときに、上下左右へ何画素離れた画素と比べるか。
+    // 深度にはノイズがあるので、隣の画素どうしだと向きがばらつく。少し離れた画素で差を取って落ち着かせる。
+    const int NormalStep = 3;
+
+    // 比べる画素までの距離の上限（画素の間隔の何倍まで）。物体の縁のように奥行きが大きく違う画素は、同じ面ではないので使わない。
+    const float NormalMaxEdgeRatio = 4f;
+
+    // 点での面の向き（長さ1）。上下左右の画素の位置の差から求め、toCamera の側（撮影したカメラの側）を向ける。
+    // 画像の端や、物体の縁で比べる画素が使えないときは Vector3.zero。
+    // maxDistance : 比べる画素までの距離の上限（m）
+    static Vector3 SurfaceNormal(Vector3[] worlds, bool[] hasWorld, int size, int x, int y, float maxDistance, Vector3 toCamera)
+    {
+        if (x < NormalStep || y < NormalStep || x + NormalStep >= size || y + NormalStep >= size) return Vector3.zero;
+
+        var center = y * size + x;
+        var left = center - NormalStep;
+        var right = center + NormalStep;
+        var down = center - NormalStep * size;
+        var up = center + NormalStep * size;
+        if (!(hasWorld[left] && hasWorld[right] && hasWorld[down] && hasWorld[up])) return Vector3.zero;
+
+        var origin = worlds[center];
+        var maxSqr = maxDistance * maxDistance;
+        if ((worlds[left] - origin).sqrMagnitude > maxSqr || (worlds[right] - origin).sqrMagnitude > maxSqr ||
+            (worlds[down] - origin).sqrMagnitude > maxSqr || (worlds[up] - origin).sqrMagnitude > maxSqr)
+        {
+            return Vector3.zero;
+        }
+
+        var normal = Vector3.Cross(worlds[right] - worlds[left], worlds[up] - worlds[down]);
+        if (normal.sqrMagnitude < 1e-12f) return Vector3.zero;
+
+        normal.Normalize();
+        return Vector3.Dot(normal, toCamera) < 0f ? -normal : normal;
     }
 
     // 深度画像の1画素が、1m先でワールドの右・上へどれだけの幅になるか（ベクトル）。

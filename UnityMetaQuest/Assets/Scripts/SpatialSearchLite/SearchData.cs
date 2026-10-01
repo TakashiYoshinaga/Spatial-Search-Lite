@@ -9,6 +9,9 @@ using UnityEngine;
 // PixelRightPerMeter / PixelUpPerMeter は深度1画素ぶんの右・上への幅を、1m先で測ったワールドのベクトル（深度に比例する）。
 // Points[i] ± 半画素ぶんが四隅の位置で、四隅をそれぞれ Projection でカメラ画像へ投影すれば、四隅のUVが分かる。
 //
+// Normals[i] は Points[i] での面の向き（長さ1、撮影したカメラの側を向く）。隣の画素から求めるので、
+// 物体の縁など隣が使えない点は Vector3.zero。物体の「正面」を決めるのに使う。
+//
 // Image は撮影ごとに作る（次の撮影で上書きしない）。結果の物体に貼って使うので、
 // 表示し終えたクラスが Destroy する。結果にならなかった撮影は SearchClient が Destroy する。
 public class CaptureData
@@ -18,6 +21,7 @@ public class CaptureData
     public Vector3[] Points;
     public Vector2[] ImageUvs;
     public float[] Depths;
+    public Vector3[] Normals;
     public Vector3 PixelRightPerMeter;
     public Vector3 PixelUpPerMeter;
     public ImageProjection Projection;
@@ -33,10 +37,14 @@ public class ImageProjection
     readonly Vector2 _cropOrigin;
     readonly Vector2 _cropSize;
 
+    // 撮影した瞬間のカメラの位置（ワールド）。この位置から見た向きが、貼った画像と合う向きになる。
+    public Vector3 CameraPosition { get; }
+
     // cropOrigin / cropSize : センサー画像のうち、カメラ画像として切り出された範囲（センサーのピクセル）
     public ImageProjection(Matrix4x4 worldToCamera, Vector2 focalLength, Vector2 principalPoint, Vector2 cropOrigin, Vector2 cropSize)
     {
         _worldToCamera = worldToCamera;
+        CameraPosition = worldToCamera.inverse.MultiplyPoint3x4(Vector3.zero);
         _focalLength = focalLength;
         _principalPoint = principalPoint;
         _cropOrigin = cropOrigin;

@@ -8,11 +8,13 @@ using UnityEngine.Rendering;
 // 結果を表示するクラス（つかめる版）。
 // 見つかった物体ごとに _objectTemplate を複製し、マスクに写っていた点を、撮影したカメラ画像を貼った四角形で表示する。
 // 四角形は点ごとにあり、シェーダーが常にこちらを向ける（ビルボード）。
+// 物体の正面（点群から求めた面の向き）から離れて、横や裏から見るほど透明になる（シェーダー）。そのために、正面の向きを物体ごとのマテリアルに渡す。
 // つかむための設定（Grabbable / GrabInteractable など）はひな形のプレハブに付けてあるので、
 // このクラスは四角形のメッシュを作り、つかめる範囲（BoxCollider）を物体に合わせるだけ。
 public class GrabbableSearchResultView : SearchResultViewBase
 {
     static readonly int CameraTextureId = Shader.PropertyToID("_CameraTexture");
+    static readonly int FrontId = Shader.PropertyToID("_FrontOS");
 
     [Tooltip("物体1つぶんのひな形（Assets/Prefabs/GrabbableSearchResult.prefab）")]
     [SerializeField] MeshFilter _objectTemplate;
@@ -28,7 +30,7 @@ public class GrabbableSearchResultView : SearchResultViewBase
 
     readonly List<GameObject> _objects = new List<GameObject>();
     readonly List<Mesh> _meshes = new List<Mesh>();
-    Material _resultMaterial;
+    readonly List<Material> _materials = new List<Material>();
     SearchResult _shownResult;
 
     public override void Initialize(SpatialSearchDataSource dataSource)
@@ -59,19 +61,16 @@ public class GrabbableSearchResultView : SearchResultViewBase
             return;
         }
 
-        // 物体はどれも同じカメラ画像を貼る。ひな形のマテリアルは共有なので、画像を渡すために複製して使う。
-        var capture = result.Capture;
-        _resultMaterial = new Material(_objectTemplate.GetComponent<MeshRenderer>().sharedMaterial);
-        _resultMaterial.SetTexture(CameraTextureId, capture.Image);
-
         // 物体ごとに点を集める。複数のマスクに写った点は、先に見つかった物体へ入れる。
+        var capture = result.Capture;
+        var templateMaterial = _objectTemplate.GetComponent<MeshRenderer>().sharedMaterial;
         var used = new bool[capture.Points.Length];
         foreach (var detection in result.Detections)
         {
             var pointIndices = CollectPointsInMask(capture, detection.Mask, used);
             if (pointIndices.Count == 0) continue;
 
-            CreateObject($"{query} {_objects.Count + 1}", capture, pointIndices);
+            CreateObject($"{query} {_objects.Count + 1}", capture, pointIndices, templateMaterial);
         }
 
         Debug.Log($"[GrabbableSearchResultView] query={query} detections={result.Detections.Count} objects={_objects.Count}");
@@ -99,7 +98,7 @@ public class GrabbableSearchResultView : SearchResultViewBase
     }
 
     // 四角形を持った物体を1つ作る。物体の中心に置き、つかめる範囲の箱を物体に合わせる。
-    void CreateObject(string objectName, CaptureData capture, List<int> pointIndices)
+    void CreateObject(string objectName, CaptureData capture, List<int> pointIndices, Material templateMaterial)
     {
         // つかめる範囲は点の中心で決める。
         var centers = new List<Vector3>(pointIndices.Count);
@@ -108,7 +107,6 @@ public class GrabbableSearchResultView : SearchResultViewBase
 
         var filter = Instantiate(_objectTemplate, bounds.center, Quaternion.identity, transform);
         filter.name = objectName;
-        filter.GetComponent<MeshRenderer>().sharedMaterial = _resultMaterial;
 
         // 点ごとの四角形にする。頂点にはカメラ画像のUV（uv0）と、中心から四隅へのずらし量（uv1）を持たせる。
         var positions = new List<Vector3>(pointIndices.Count * 4);
@@ -128,6 +126,16 @@ public class GrabbableSearchResultView : SearchResultViewBase
             cornerSizes[i] *= worldToLocalScale;
             maxCornerSize = Mathf.Max(maxCornerSize, Mathf.Abs(cornerSizes[i].x), Mathf.Abs(cornerSizes[i].y));
         }
+
+        // 貼るカメラ画像と、物体の正面の向き（物体のローカル座標）を、物体ごとのマテリアルで渡す。
+        // シェーダーは、正面と今の視点の向きが離れるほど（横や裏から見るほど）物体を透明にする。
+        // ローカル座標で持たせるので、物体をつかんで回すと正面も一緒に回る。
+        var material = new Material(templateMaterial);
+        material.SetTexture(CameraTextureId, capture.Image);
+        var front = FrontDirection(capture, pointIndices, bounds.center);
+        material.SetVector(FrontId, worldToLocal.MultiplyVector(front).normalized);
+        filter.GetComponent<MeshRenderer>().sharedMaterial = material;
+        _materials.Add(material);
 
         var mesh = new Mesh { name = objectName, indexFormat = IndexFormat.UInt32 };
         mesh.SetVertices(positions);
@@ -151,6 +159,20 @@ public class GrabbableSearchResultView : SearchResultViewBase
 
         _objects.Add(filter.gameObject);
         _meshes.Add(mesh);
+    }
+
+    // 物体の正面の向き（ワールド、長さ1）。点での面の向き（法線）の平均で、撮影したカメラの側を向く。
+    // 本や画面のように平らな物なら面の向き、丸い物ならカメラの側を向く。
+    // 撮影したカメラの方向を正面にすると、斜めから撮った物（机の上の本など）は、面が自分を向いた姿勢が正面からずれてしまうので使わない。
+    // 法線が取れなかったときは、物体の中心から撮影したカメラへの向きにする。
+    static Vector3 FrontDirection(CaptureData capture, List<int> pointIndices, Vector3 objectCenter)
+    {
+        var sum = Vector3.zero;
+        foreach (var point in pointIndices) sum += capture.Normals[point];
+
+        return sum.sqrMagnitude > 1e-6f
+            ? sum.normalized
+            : (capture.Projection.CameraPosition - objectCenter).normalized;
     }
 
     // 各軸の両端から ratio ぶんの点を外した範囲。マスクの縁で拾った背景の点に引きずられないようにする。
@@ -196,8 +218,8 @@ public class GrabbableSearchResultView : SearchResultViewBase
         foreach (var mesh in _meshes) Destroy(mesh);
         _meshes.Clear();
 
-        if (_resultMaterial != null) Destroy(_resultMaterial);
-        _resultMaterial = null;
+        foreach (var material in _materials) Destroy(material);
+        _materials.Clear();
 
         if (_shownResult == null) return;
         foreach (var detection in _shownResult.Detections)
