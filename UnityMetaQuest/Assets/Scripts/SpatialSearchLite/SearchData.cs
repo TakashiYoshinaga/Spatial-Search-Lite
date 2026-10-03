@@ -14,9 +14,14 @@ using UnityEngine;
 //
 // Image は撮影ごとに作る（次の撮影で上書きしない）。結果の物体に貼って使うので、
 // 表示し終えたクラスが Destroy する。結果にならなかった撮影は SearchClient が Destroy する。
+//
+// HasPoint が true のときは、検索語ではなく点で探す。PointUv（ImageUvs と同じ向き）に写っている物体1つだけを切り出す。
+// Query は表示用の名前になる。
 public class CaptureData
 {
     public string Query;
+    public bool HasPoint;
+    public Vector2 PointUv;
     public Texture2D Image;
     public Vector3[] Points;
     public Vector2[] ImageUvs;
@@ -92,6 +97,16 @@ public class SearchRequestMessage
 {
     public string type = "search";
     public string query;
+    public string image; // PNGのbase64
+}
+
+// 点で探すとき。x, y は画像のピクセルで、左上が原点（UVとは上下が逆）。
+[Serializable]
+public class PointRequestMessage
+{
+    public string type = "point";
+    public int x;
+    public int y;
     public string image; // PNGのbase64
 }
 

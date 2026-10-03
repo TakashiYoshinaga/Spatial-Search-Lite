@@ -71,16 +71,30 @@ public class SearchClient : MonoBehaviour
             return;
         }
 
-        var request = new SearchRequestMessage
-        {
-            query = capture.Query,
-            image = Convert.ToBase64String(capture.Image.EncodeToPNG()),
-        };
-
         _pending = capture;
-        _webSocket.SendWebSocketMessage(JsonUtility.ToJson(request), completed =>
+        _webSocket.SendWebSocketMessage(RequestJson(capture), completed =>
         {
             if (!completed) Debug.LogWarning("[SearchClient] 送信に失敗しました");
+        });
+    }
+
+    // 点が指定されていれば点で、なければ検索語で探すリクエストにする。
+    static string RequestJson(CaptureData capture)
+    {
+        var image = Convert.ToBase64String(capture.Image.EncodeToPNG());
+        if (!capture.HasPoint)
+        {
+            return JsonUtility.ToJson(new SearchRequestMessage { query = capture.Query, image = image });
+        }
+
+        // UVは左下原点、PNGのピクセルは左上原点なので上下を反転する。
+        var width = capture.Image.width;
+        var height = capture.Image.height;
+        return JsonUtility.ToJson(new PointRequestMessage
+        {
+            x = Mathf.Clamp((int)(capture.PointUv.x * width), 0, width - 1),
+            y = Mathf.Clamp((int)((1f - capture.PointUv.y) * height), 0, height - 1),
+            image = image,
         });
     }
 

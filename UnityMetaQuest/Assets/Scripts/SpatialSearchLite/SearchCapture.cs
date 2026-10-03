@@ -54,12 +54,7 @@ public class SearchCapture : MonoBehaviour
     // 今のカメラ画像と深度を撮影して DataSource へ流す。まだ撮影できない状態なら false。
     public bool Capture(string query)
     {
-        if (_dataSource == null || _cameraAccess == null || !_cameraAccess.IsPlaying) return false;
-        if (!_hasDepth)
-        {
-            Debug.LogWarning("[SearchCapture] 深度がまだ取れていません");
-            return false;
-        }
+        if (!CanCapture()) return false;
 
         var capture = new CaptureData
         {
@@ -71,6 +66,173 @@ public class SearchCapture : MonoBehaviour
         Debug.Log($"[SearchCapture] query={capture.Query} image={capture.Image.width}x{capture.Image.height} points={capture.Points.Length}");
         _dataSource.SetCapture(capture);
         return true;
+    }
+
+    // 今のカメラ画像と深度を撮影し、target（ワールド座標）に写っている物体1つを探すよう DataSource へ流す。
+    // target が今のカメラ画像に写っていない、またはまだ撮影できない状態なら false。
+    // label は結果の表示に使う名前。
+    public bool CaptureAt(Vector3 target, string label)
+    {
+        if (!CanCapture()) return false;
+        if (!TryProjectToImage(target, out var pointUv) || !IsInImage(pointUv, 0f))
+        {
+            Debug.LogWarning("[SearchCapture] 指した点がカメラ画像に写っていません");
+            return false;
+        }
+
+        var capture = new CaptureData
+        {
+            Query = label,
+            HasPoint = true,
+            PointUv = pointUv,
+            Image = CaptureCameraImage(),
+        };
+        BuildPoints(capture);
+
+        Debug.Log($"[SearchCapture] point uv={capture.PointUv} image={capture.Image.width}x{capture.Image.height} points={capture.Points.Length}");
+        _dataSource.SetCapture(capture);
+        return true;
+    }
+
+    bool CanCapture()
+    {
+        if (_dataSource == null || _cameraAccess == null || !_cameraAccess.IsPlaying) return false;
+        if (!_hasDepth)
+        {
+            Debug.LogWarning("[SearchCapture] 深度がまだ取れていません");
+            return false;
+        }
+        return true;
+    }
+
+    // ワールド座標が、今のカメラ画像のどこに写るか（UV、0〜1、左下原点）。カメラの後ろなら false。
+    // 画像の外に写る点は、UVが0〜1の外の値になる（IsInImage で確かめる）。
+    public bool TryProjectToImage(Vector3 world, out Vector2 uv)
+    {
+        if (_cameraAccess == null || !_cameraAccess.IsPlaying)
+        {
+            uv = Vector2.zero;
+            return false;
+        }
+        return CurrentProjection().TryProject(world, out uv);
+    }
+
+    // UVが画像の中にあるか。margin だけ内側（負なら外側）まで広げて判定する。
+    public static bool IsInImage(Vector2 uv, float margin)
+    {
+        return uv.x >= margin && uv.x <= 1f - margin && uv.y >= margin && uv.y <= 1f - margin;
+    }
+
+    // 最新の深度に向けてレイを飛ばし、最初に当たった位置を返す。
+    // onEdge : 当たった位置のまわりで奥行きが大きく飛んでいる（物体の縁や穴）。そこを指すと狙った物体が取れにくい。
+    public bool TryRaycastDepth(Ray ray, out Vector3 hit, out bool onEdge)
+    {
+        hit = Vector3.zero;
+        onEdge = false;
+        if (!_hasDepth) return false;
+
+        var zBufferParams = Shader.GetGlobalVector(EnvironmentDepthZBufferParamsId);
+        var worldToClip = _depthViewProjection * Matrix4x4.TRS(_depthPose.position, _depthPose.rotation, Vector3.one).inverse;
+        var size = _depthAccess.TextureSize;
+
+        // 少しずつ進めて、レイ上の点が深度の面より奥に入った最初の位置を探す。
+        // 進める幅は距離に比例させる（遠いほど深度の1画素も大きいので、細かく進めても意味がない）。
+        var previous = _minDepthMeters;
+        for (var distance = _minDepthMeters; distance <= _maxDepthMeters; distance += Mathf.Max(RaycastMinStep, distance * RaycastStepRatio))
+        {
+            if (!SampleRay(ray.GetPoint(distance), worldToClip, zBufferParams, size, out var pointDepth, out var surfaceDepth, out _, out _)) continue;
+            if (pointDepth < surfaceDepth)
+            {
+                previous = distance;
+                continue;
+            }
+
+            // 前の位置との間を二分して、面に当たる位置を詰める。
+            var near = previous;
+            var far = distance;
+            for (var i = 0; i < 6; i++)
+            {
+                var middle = (near + far) * 0.5f;
+                if (SampleRay(ray.GetPoint(middle), worldToClip, zBufferParams, size, out pointDepth, out surfaceDepth, out _, out _) && pointDepth >= surfaceDepth)
+                {
+                    far = middle;
+                }
+                else
+                {
+                    near = middle;
+                }
+            }
+
+            hit = ray.GetPoint(far);
+            if (SampleRay(hit, worldToClip, zBufferParams, size, out _, out _, out var x, out var y))
+            {
+                onEdge = IsDepthEdge(x, y, size);
+            }
+            return true;
+        }
+        return false;
+    }
+
+    // レイを進めるときの幅。距離の RaycastStepRatio 倍（最小 RaycastMinStep m）。
+    const float RaycastStepRatio = 0.01f;
+    const float RaycastMinStep = 0.005f;
+
+    // 縁と見なす、まわりの奥行きの差（その位置の深度に対する割合）と、調べる範囲（画素）。
+    const float EdgeDepthRatio = 0.08f;
+    const int EdgeRadius = 3;
+
+    // ワールド座標を深度画像へ投影し、その点の奥行き（pointDepth）と、そこに写っている面の奥行き（surfaceDepth）を返す。
+    // 深度画像の外、または面の奥行きが取れていない画素なら false。
+    bool SampleRay(Vector3 world, Matrix4x4 worldToClip, Vector4 zBufferParams, int size,
+        out float pointDepth, out float surfaceDepth, out int x, out int y)
+    {
+        pointDepth = surfaceDepth = 0f;
+        x = y = 0;
+
+        var clip = worldToClip * new Vector4(world.x, world.y, world.z, 1f);
+        if (clip.w <= 1e-5f) return false;
+
+        var ndc = (Vector3)clip / clip.w;
+        if (Mathf.Abs(ndc.x) >= 1f || Mathf.Abs(ndc.y) >= 1f) return false;
+
+        // BuildPoints の逆。画素の中心が (x + 0.5) / size * 2 - 1、zは zBufferParams.x / depth - zBufferParams.y。
+        x = Mathf.Clamp((int)((ndc.x * 0.5f + 0.5f) * size), 0, size - 1);
+        y = Mathf.Clamp((int)((ndc.y * 0.5f + 0.5f) * size), 0, size - 1);
+        surfaceDepth = _depth[y * size + x];
+        if (!(surfaceDepth >= _minDepthMeters && surfaceDepth <= _maxDepthMeters)) return false; // NaNもここで弾く
+
+        pointDepth = zBufferParams.x / (ndc.z + zBufferParams.y);
+        return true;
+    }
+
+    // 深度画像の (x, y) のまわりで、奥行きが大きく飛んでいるか（取れていない画素が多い場合も縁とみなす）。
+    bool IsDepthEdge(int x, int y, int size)
+    {
+        var center = _depth[y * size + x];
+        var minDepth = center;
+        var maxDepth = center;
+        var missing = 0;
+        for (var dy = -EdgeRadius; dy <= EdgeRadius; dy++)
+        {
+            for (var dx = -EdgeRadius; dx <= EdgeRadius; dx++)
+            {
+                var sx = x + dx;
+                var sy = y + dy;
+                if (sx < 0 || sy < 0 || sx >= size || sy >= size) continue;
+
+                var depth = _depth[sy * size + sx];
+                if (!(depth >= _minDepthMeters && depth <= _maxDepthMeters))
+                {
+                    missing++;
+                    continue;
+                }
+                minDepth = Mathf.Min(minDepth, depth);
+                maxDepth = Mathf.Max(maxDepth, depth);
+            }
+        }
+
+        var window = (EdgeRadius * 2 + 1) * (EdgeRadius * 2 + 1);
+        return maxDepth - minDepth > center * EdgeDepthRatio || missing > window / 4;
     }
 
     // カメラのテクスチャ（GPU上）をCPUから読めるTexture2Dへ写す。
@@ -103,19 +265,7 @@ public class SearchCapture : MonoBehaviour
     // 計算式は Assets/Shaders/ColoredDepthPointCloudCpuURP.shader と同じ。
     void BuildPoints(CaptureData capture)
     {
-        // --- カメラ画像への投影に使う値 ---
-        // CurrentResolution はセンサー画像の中央を切り抜いたものなので、その切り抜き範囲を求める。
-        var intrinsics = _cameraAccess.Intrinsics;
-        var sensor = (Vector2)intrinsics.SensorResolution;
-        var image = (Vector2)_cameraAccess.CurrentResolution;
-        var scale = new Vector2(image.x / sensor.x, image.y / sensor.y);
-        scale /= Mathf.Max(scale.x, scale.y);
-        var cropSize = Vector2.Scale(sensor, scale);
-        var cropOrigin = (sensor - cropSize) * 0.5f;
-
-        var cameraPose = _cameraAccess.GetCameraPose();
-        var worldToCamera = Matrix4x4.TRS(cameraPose.position, cameraPose.rotation, Vector3.one).inverse;
-        var projection = new ImageProjection(worldToCamera, intrinsics.FocalLength, intrinsics.PrincipalPoint, cropOrigin, cropSize);
+        var projection = CurrentProjection();
 
         // --- 深度からワールド座標への復元に使う値 ---
         var zBufferParams = Shader.GetGlobalVector(EnvironmentDepthZBufferParamsId);
@@ -185,6 +335,23 @@ public class SearchCapture : MonoBehaviour
         capture.PixelRightPerMeter = pixelRight;
         capture.PixelUpPerMeter = pixelUp;
         capture.Projection = projection;
+    }
+
+    // 今のカメラの位置・向きで、ワールド座標をカメラ画像へ投影するもの。
+    ImageProjection CurrentProjection()
+    {
+        // CurrentResolution はセンサー画像の中央を切り抜いたものなので、その切り抜き範囲を求める。
+        var intrinsics = _cameraAccess.Intrinsics;
+        var sensor = (Vector2)intrinsics.SensorResolution;
+        var image = (Vector2)_cameraAccess.CurrentResolution;
+        var scale = new Vector2(image.x / sensor.x, image.y / sensor.y);
+        scale /= Mathf.Max(scale.x, scale.y);
+        var cropSize = Vector2.Scale(sensor, scale);
+        var cropOrigin = (sensor - cropSize) * 0.5f;
+
+        var cameraPose = _cameraAccess.GetCameraPose();
+        var worldToCamera = Matrix4x4.TRS(cameraPose.position, cameraPose.rotation, Vector3.one).inverse;
+        return new ImageProjection(worldToCamera, intrinsics.FocalLength, intrinsics.PrincipalPoint, cropOrigin, cropSize);
     }
 
     // 面の向き（法線）を求めるときに、上下左右へ何画素離れた画素と比べるか。
