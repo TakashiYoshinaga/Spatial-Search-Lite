@@ -80,6 +80,41 @@ class Sam3Client:
             detections.append(Detection(score=score, mask_png=mask_png))
         return detections
 
+    async def segment_at(self, image_png: bytes, x: int, y: int) -> Detection:
+        """画像の (x, y) に写っている物体1つのマスクを返す。座標は画像のピクセルで、左上が原点。
+
+        点で指したときは、SAMが候補の中から一番確からしいマスクを1枚だけ返す。
+        必ず1枚返るので、segment のようにスコアを先に確かめる必要はない。
+        点のときはSAMがスコアを出さないので score は 1.0 にする。
+        """
+        image_name = await self._upload_image(image_png)
+        outputs = await self._run(self._point_workflow(image_name, x, y))
+        mask_files = outputs[MASK_OUTPUT]["images"]
+        if len(mask_files) != 1:
+            raise RuntimeError(f"expected 1 mask but got {len(mask_files)}")
+        return Detection(score=1.0, mask_png=await self._fetch_image(mask_files[0]))
+
+    def _point_workflow(self, image_name: str, x: int, y: int) -> dict:
+        """点で指した物体を切り出すworkflow。テキストを使わないのでCLIPTextEncodeは無い。"""
+        s = self.settings
+        return {
+            LOAD_IMAGE: {"class_type": "LoadImage", "inputs": {"image": image_name}},
+            CHECKPOINT: {"class_type": "CheckpointLoaderSimple", "inputs": {"ckpt_name": s.checkpoint}},
+            DETECT: {
+                "class_type": "SAM3_Detect",
+                "inputs": {
+                    "model": [CHECKPOINT, 0],
+                    "image": [LOAD_IMAGE, 0],
+                    "positive_coords": json.dumps([{"x": x, "y": y}]),
+                    "threshold": s.threshold,
+                    "refine_iterations": s.refine_iterations,
+                    "individual_masks": True,
+                },
+            },
+            MASK_TO_IMAGE: {"class_type": "MaskToImage", "inputs": {"mask": [DETECT, 0]}},
+            MASK_OUTPUT: {"class_type": "PreviewImage", "inputs": {"images": [MASK_TO_IMAGE, 0]}},
+        }
+
     def _workflow(self, image_name: str, query: str, *, with_masks: bool) -> dict:
         s = self.settings
         workflow = {

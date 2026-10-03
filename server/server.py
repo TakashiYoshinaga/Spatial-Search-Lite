@@ -4,6 +4,9 @@ Unityから画像と検索語を受け取り、ComfyUIのSAM3で物体を探し�
 
 Unity → サーバー
     {"type": "search", "query": "monitor", "image": "<PNGのbase64>"}
+    {"type": "point", "x": 640, "y": 480, "image": "<PNGのbase64>"}   (x, y は画像のピクセル、左上が原点)
+
+point のときは、その点に写っている物体1つだけを返す（detections は1件、query は空）。
 
 サーバー → Unity（message は英語。Quest側に日本語フォントが無いため）
     {"type": "result", "query": "monitor", "detections": [{"score": 0.93, "mask": "<PNGのbase64>"}, ...]}
@@ -40,12 +43,18 @@ async def handle(websocket, sam3: Sam3Client) -> None:
 async def search(message: str, sam3: Sam3Client) -> dict:
     try:
         request = json.loads(message)
-        query = request["query"]
         image_png = base64.b64decode(request["image"])
 
-        log.info("search: query=%r image=%d bytes", query, len(image_png))
-        detections = await sam3.segment(image_png, query)
-        log.info("found %d: scores=%s", len(detections), [round(d.score, 2) for d in detections])
+        if request.get("type") == "point":
+            query = ""
+            x, y = int(request["x"]), int(request["y"])
+            log.info("point: (%d, %d) image=%d bytes", x, y, len(image_png))
+            detections = [await sam3.segment_at(image_png, x, y)]
+        else:
+            query = request["query"]
+            log.info("search: query=%r image=%d bytes", query, len(image_png))
+            detections = await sam3.segment(image_png, query)
+            log.info("found %d: scores=%s", len(detections), [round(d.score, 2) for d in detections])
 
         return {
             "type": "result",
