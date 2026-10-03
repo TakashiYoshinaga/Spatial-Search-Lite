@@ -132,7 +132,8 @@ public class SearchCapture : MonoBehaviour
         if (!_hasDepth) return false;
 
         var zBufferParams = Shader.GetGlobalVector(EnvironmentDepthZBufferParamsId);
-        var worldToClip = _depthViewProjection * Matrix4x4.TRS(_depthPose.position, _depthPose.rotation, Vector3.one).inverse;
+        // BuildPoints の逆。BuildPoints では depthLocalToWorld が打ち消し合い、ビュー射影行列がそのままワールド → クリップになる。
+        var worldToClip = _depthViewProjection;
         var size = _depthAccess.TextureSize;
 
         // 少しずつ進めて、レイ上の点が深度の面より奥に入った最初の位置を探す。

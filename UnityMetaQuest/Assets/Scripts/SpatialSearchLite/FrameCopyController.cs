@@ -6,9 +6,9 @@ using UnityEngine;
 // 両手で写真を撮るときの枠を作って物体を指し、その物体1つを切り出して複製するクラス。
 //
 // 流れ
-//   構える : 両手の親指と人差し指でL字を作り、左右のL字で四角い枠を作る
+//   構える : 両手の親指と人差し指でL字を作り、左手を枠の左上、右手を右下の角にする（人差し指は横向き、親指は左手が下・右手が上）
 //            頭から枠の中心へのレイが深度に当たった位置に点を出す（物体の表面に出すので、物体と同じ奥行きに見える）
-//   ロック : 点が1秒止まったら、その位置（ワールド座標）を覚える。リングが緑になり「Lower your hands」と出る
+//   ロック : 点が2秒止まったら、その位置（ワールド座標）を覚える。リングが緑になり「Lower your hands」と出る
 //   撮影   : 両手がカメラ画像から消えたら撮影し、覚えた位置を撮影した画像へ投影して点で探す（手が写り込まないようにするため）
 //   結果   : 見つかった物体1つが、撮影した位置に複製される（表示とつかむのは GrabbableSearchResultView）
 //
@@ -34,7 +34,7 @@ public class FrameCopyController : MonoBehaviour
     [Header("Lock")]
     [Tooltip("点がこの角度（度）以内に止まっている時間でロックする")]
     [SerializeField, Min(0.1f)] float _stableAngle = 2f;
-    [SerializeField, Min(0.1f)] float _lockSeconds = 1f;
+    [SerializeField, Min(0.1f)] float _lockSeconds = 2f;
 
     [Header("Capture")]
     [Tooltip("両手がカメラ画像から消えてから撮影するまでの時間（秒）")]
@@ -51,6 +51,10 @@ public class FrameCopyController : MonoBehaviour
     [SerializeField] Color _aimColor = Color.white;
     [SerializeField] Color _edgeColor = new Color(1f, 0.55f, 0f);
     [SerializeField] Color _lockedColor = new Color(0.2f, 1f, 0.3f);
+
+    [Header("Debug")]
+    [Tooltip("手の判定に使った値と、枠にならない理由を視界の下に出す（閾値の調整用）")]
+    [SerializeField] bool _showDebug;
 
     // 撮影結果の表示に使う名前
     const string Label = "object";
@@ -83,6 +87,8 @@ public class FrameCopyController : MonoBehaviour
     LineRenderer _frame;
     TextMeshPro _message;
     float _messageUntil;
+    TextMeshPro _debug;
+    string _debugText;
 
     const int RingSegments = 48;
 
@@ -134,6 +140,7 @@ public class FrameCopyController : MonoBehaviour
         }
 
         HideAll();
+        _debugText = $"state: {_state}";
         switch (_state)
         {
             case State.Aiming: UpdateAiming(); break;
@@ -141,6 +148,19 @@ public class FrameCopyController : MonoBehaviour
             case State.Waiting: UpdateWaiting(); break;
         }
         UpdateMessage();
+        UpdateDebug();
+    }
+
+    // 視界の下に、頭に付いて動く文字でデバッグ表示を出す。
+    void UpdateDebug()
+    {
+        if (!_showDebug) return;
+
+        var position = _head.position + _head.forward * 0.7f - _head.up * 0.25f;
+        _debug.transform.position = position;
+        _debug.transform.rotation = Quaternion.LookRotation(position - _head.position, _head.up);
+        _debug.text = _debugText;
+        _debug.enabled = true;
     }
 
     void UpdateAiming()
@@ -249,20 +269,64 @@ public class FrameCopyController : MonoBehaviour
 
     // ---- 手の形 ----
 
-    // 両手がL字で、左右のL字の角が四角い枠の対角になっているとき true。角の位置（ワールド）を返す。
+    // 両手がL字で、左手が枠の左上、右手が右下の角になっているとき true。角の位置（ワールド）を返す。
+    //   左手 : 人差し指は右向き（枠の上辺）、親指は下向き（左辺）
+    //   右手 : 人差し指は左向き（枠の下辺）、親指は上向き（右辺）
     bool TryGetFrame(out Vector3 leftCorner, out Vector3 rightCorner)
     {
-        rightCorner = Vector3.zero;
-        if (!TryGetLCorner(_leftHand, out leftCorner) || !TryGetLCorner(_rightHand, out rightCorner)) return false;
+        var leftOk = TryGetLCorner(_leftHand, out var leftShape);
+        var rightOk = TryGetLCorner(_rightHand, out var rightShape);
+        leftCorner = leftShape.Corner;
+        rightCorner = rightShape.Corner;
 
-        // 頭から見た位置で、枠として自然な形か確かめる。
-        var left = _head.InverseTransformPoint(leftCorner);
-        var right = _head.InverseTransformPoint(rightCorner);
-        if (left.z < MinFrameDistance || right.z < MinFrameDistance || left.z > MaxFrameDistance || right.z > MaxFrameDistance) return false;
-        if (right.x - left.x < MinFrameWidth) return false;               // 左手が左、右手が右
-        if (Mathf.Abs(right.y - left.y) < MinFrameHeight) return false;   // 角が上下にずれている（対角）
-        if (Mathf.Abs(right.z - left.z) > MaxFrameDepthGap) return false; // 枠が顔の方を向いている
-        return true;
+        var reason = FrameFailure(leftOk, leftShape, rightOk, rightShape);
+        if (_showDebug)
+        {
+            _debugText = $"L {Describe(leftShape)}\nR {Describe(rightShape)}\nframe: {reason ?? "OK"}";
+        }
+        return reason == null;
+    }
+
+    // 枠にならない理由（英語、デバッグ表示用）。枠になるなら null。
+    string FrameFailure(bool leftOk, HandShape leftShape, bool rightOk, HandShape rightShape)
+    {
+        if (!leftOk) return "left hand: " + leftShape.Failure;
+        if (!rightOk) return "right hand: " + rightShape.Failure;
+
+        // 頭から見た位置と向きで、枠として自然な形か確かめる。
+        var left = _head.InverseTransformPoint(leftShape.Corner);
+        var right = _head.InverseTransformPoint(rightShape.Corner);
+        if (left.z < MinFrameDistance || right.z < MinFrameDistance || left.z > MaxFrameDistance || right.z > MaxFrameDistance) return "distance";
+        if (right.x - left.x < MinFrameWidth) return "left hand is not on the left";
+        if (left.y - right.y < MinFrameHeight) return "left hand is not above";
+        if (Mathf.Abs(right.z - left.z) > MaxFrameDepthGap) return "frame is not facing you";
+        if (ViewDirection(leftShape.Index).x < MinFingerAlignment) return "left index is not pointing right";
+        if (ViewDirection(leftShape.Thumb).y > -MinFingerAlignment) return "left thumb is not pointing down";
+        if (ViewDirection(rightShape.Index).x > -MinFingerAlignment) return "right index is not pointing left";
+        if (ViewDirection(rightShape.Thumb).y < MinFingerAlignment) return "right thumb is not pointing up";
+        return null;
+    }
+
+    // 手の判定に使った値（デバッグ表示用）。指の向きは頭から見た角度（0°が右、90°が上、-90°が下、180°が左）。
+    string Describe(HandShape shape)
+    {
+        if (!shape.Tracked) return "not tracked";
+        return $"straight idx {shape.IndexStraightness:0.00} thb {shape.ThumbStraightness:0.00}  mid {shape.MiddleReach:0.00}  L {shape.LAngle:0}" +
+               $"  dir idx {ViewAngle(shape.Index):0} thb {ViewAngle(shape.Thumb):0}";
+    }
+
+    float ViewAngle(Vector3 direction)
+    {
+        var flat = ViewDirection(direction);
+        return Mathf.Atan2(flat.y, flat.x) * Mathf.Rad2Deg;
+    }
+
+    // 向き（ワールド）を頭から見た上下左右の面に写した向き（長さ1。x が右、y が上）。
+    Vector2 ViewDirection(Vector3 direction)
+    {
+        var local = _head.InverseTransformDirection(direction);
+        var flat = new Vector2(local.x, local.y);
+        return flat.sqrMagnitude > 1e-8f ? flat.normalized : Vector2.zero;
     }
 
     // 頭から枠の角までの距離（m）、枠の最小の幅・高さ（m）、左右の角の奥行きの差の上限（m）
@@ -272,11 +336,32 @@ public class FrameCopyController : MonoBehaviour
     const float MinFrameHeight = 0.03f;
     const float MaxFrameDepthGap = 0.2f;
 
-    // 親指と人差し指を伸ばし、中指を曲げた「L字」のとき true。L字の角（親指と人差し指の付け根の間）を返す。
-    static bool TryGetLCorner(Hand hand, out Vector3 corner)
+    // 指が決めた向き（右・左・上・下）を向いているとみなす下限。cos(45°)、つまりその向きから45°以内。
+    const float MinFingerAlignment = 0.707f;
+
+    // 片手の形を測った値。Corner は L字の角（親指と人差し指の付け根の間）、Index / Thumb は指の向き（ワールド）。
+    struct HandShape
     {
-        corner = Vector3.zero;
-        if (!hand.IsTrackedDataValid) return false;
+        public bool Tracked;
+        public Vector3 Corner;
+        public Vector3 Index;
+        public Vector3 Thumb;
+        public float IndexStraightness;
+        public float ThumbStraightness;
+        public float MiddleReach;
+        public float LAngle;
+        public string Failure; // L字でない理由（英語、デバッグ表示用）
+    }
+
+    // 親指と人差し指を伸ばし、中指を曲げた「L字」のとき true。L字でなくても、測れた値は shape に入れて返す。
+    static bool TryGetLCorner(Hand hand, out HandShape shape)
+    {
+        shape = new HandShape();
+        if (!hand.IsTrackedDataValid)
+        {
+            shape.Failure = "not tracked";
+            return false;
+        }
         if (!hand.GetJointPose(HandJointId.HandWristRoot, out var wrist) ||
             !hand.GetJointPose(HandJointId.HandThumb2, out var thumb2) ||
             !hand.GetJointPose(HandJointId.HandThumb3, out var thumb3) ||
@@ -288,23 +373,25 @@ public class FrameCopyController : MonoBehaviour
             !hand.GetJointPose(HandJointId.HandMiddle1, out var middle1) ||
             !hand.GetJointPose(HandJointId.HandMiddleTip, out var middleTip))
         {
+            shape.Failure = "no joint pose";
             return false;
         }
 
-        var indexStraight = Straightness(index1.position, index2.position, index3.position, indexTip.position);
-        var thumbStraight = Straightness(thumb2.position, thumb3.position, thumbTip.position);
-        if (indexStraight < MinIndexStraightness || thumbStraight < MinThumbStraightness) return false;
+        shape.Tracked = true;
+        shape.Corner = (thumb2.position + index1.position) * 0.5f;
+        shape.Index = indexTip.position - index1.position;
+        shape.Thumb = thumbTip.position - thumb2.position;
+        shape.IndexStraightness = Straightness(index1.position, index2.position, index3.position, indexTip.position);
+        shape.ThumbStraightness = Straightness(thumb2.position, thumb3.position, thumbTip.position);
+        // 中指の曲がり具合。指先が付け根より手首から遠くなければ曲がっている。手を開いただけのときにL字と見なさないため。
+        shape.MiddleReach = Vector3.Distance(middleTip.position, wrist.position) / Vector3.Distance(middle1.position, wrist.position);
+        shape.LAngle = Vector3.Angle(shape.Thumb, shape.Index);
 
-        // 中指が曲がっている（指先が付け根より手首から遠くない）。手を開いただけのときにL字と見なさないため。
-        var middleReach = Vector3.Distance(middleTip.position, wrist.position) / Vector3.Distance(middle1.position, wrist.position);
-        if (middleReach > MaxMiddleReach) return false;
-
-        // 親指と人差し指がおおよそ直角。
-        var angle = Vector3.Angle(thumbTip.position - thumb2.position, indexTip.position - index1.position);
-        if (angle < MinLAngle || angle > MaxLAngle) return false;
-
-        corner = (thumb2.position + index1.position) * 0.5f;
-        return true;
+        if (shape.IndexStraightness < MinIndexStraightness) shape.Failure = "index is bent";
+        else if (shape.ThumbStraightness < MinThumbStraightness) shape.Failure = "thumb is bent";
+        else if (shape.MiddleReach > MaxMiddleReach) shape.Failure = "middle finger is not curled";
+        else if (shape.LAngle < MinLAngle || shape.LAngle > MaxLAngle) shape.Failure = "thumb and index are not at a right angle";
+        return shape.Failure == null;
     }
 
     // 指の伸び具合。付け根から指先までの直線距離と、関節をたどった長さの比（1でまっすぐ）。
@@ -317,9 +404,9 @@ public class FrameCopyController : MonoBehaviour
 
     const float MinIndexStraightness = 0.9f;
     const float MinThumbStraightness = 0.85f;
-    const float MaxMiddleReach = 1.2f;
-    const float MinLAngle = 50f;
-    const float MaxLAngle = 130f;
+    const float MaxMiddleReach = 1.7f; // 伸ばすと1.8〜1.9、軽く曲げて1.4〜1.5。軽く曲げただけでも認める
+    const float MinLAngle = 45f;
+    const float MaxLAngle = 135f;
 
     // 手の関節のどれかがカメラ画像（の少し外側まで）に写っているか。追跡できていない手は写っていないとみなす。
     bool IsHandInImage(Hand hand)
@@ -348,6 +435,15 @@ public class FrameCopyController : MonoBehaviour
         _message.alignment = TextAlignmentOptions.Center;
         _message.fontSize = 5f; // 3Dの文字は1ポイントがおよそ0.1。localScale を掛けた大きさになる
         _message.textWrappingMode = TextWrappingModes.NoWrap;
+
+        var debug = new GameObject("Debug");
+        debug.transform.SetParent(transform, false);
+        _debug = debug.AddComponent<TextMeshPro>();
+        _debug.alignment = TextAlignmentOptions.Center;
+        _debug.fontSize = 5f;
+        _debug.textWrappingMode = TextWrappingModes.NoWrap;
+        _debug.rectTransform.sizeDelta = new Vector2(20f, 4f);
+        _debug.transform.localScale = Vector3.one * 0.02f;
         _message.rectTransform.sizeDelta = new Vector2(20f, 2f);
     }
 
@@ -371,6 +467,7 @@ public class FrameCopyController : MonoBehaviour
         _ring.enabled = false;
         _frame.enabled = false;
         _message.enabled = false;
+        _debug.enabled = false;
     }
 
     // 見た目の大きさが angle 度になる、position での長さ（m）
