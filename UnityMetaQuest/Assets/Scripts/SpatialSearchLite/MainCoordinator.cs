@@ -8,7 +8,7 @@ using UnityEngine.UI;
 //   SearchCapture    : Capture(query) で撮影 → DataSource.SetCapture
 //   SearchClient     : 撮影データをサーバーへ送る → 結果を DataSource.SetResult
 //   SearchResultView : 結果の点群を表示（つかめる版は GrabbableSearchResultView）
-//   FrameCopyController : 手の枠で指した物体を CaptureAt で撮影する（SpatialSearchLiteFrame シーンのみ）
+//   FrameCopyController : 手の枠で指した物体を CaptureAt で撮影する（2-SpatialSearchLiteFrame(Experimental) シーンのみ）
 //
 // UIの流れ
 //   起動 → サーバーIPダイアログ（前回のIPを入れておく）→ Connect → 接続できたら閉じる
@@ -26,7 +26,7 @@ public class MainCoordinator : MonoBehaviour
     [SerializeField] SearchCapture _capture;
     [SerializeField] SearchClient _client;
     [SerializeField] SearchResultViewBase _resultView;
-    [Tooltip("手の枠で指して物体を複製する（SpatialSearchLiteFrame シーンのみ。無ければ空のまま）")]
+    [Tooltip("手の枠で指して物体を複製する（2-SpatialSearchLiteFrame(Experimental) シーンのみ。無ければ空のまま）")]
     [SerializeField] FrameCopyController _frameCopy;
 
     [Header("Server Dialog")]

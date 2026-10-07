@@ -4,12 +4,20 @@ Meta Quest で見ている現実の空間から、言葉で指定した物体を
 
 検索ウィンドウに「monitor」と入力して Search を押すと、Questのカメラ画像をPCへ送り、画像認識AI（SAM 3.1）が見つけた物体の位置に点群が表示されます。
 
-両手で写真を撮るときの枠を作って物体を指すと、検索語なしでその物体1つだけを切り出して複製することもできます（[7. 指の枠で物体をコピーする](#7-指の枠で物体をコピーするspatialsearchliteframe-シーン)）。
+両手で写真を撮るときの枠を作って物体を指すと、検索語なしでその物体1つだけを切り出して複製することもできます（[7. 指の枠で物体をコピーする](#7-指の枠で物体をコピーする2-spatialsearchliteframeexperimental-シーン)）。
 
 ```text
 Quest : カメラ画像 + 深度 を撮影 ──(WebSocket)──▶ PC : Pythonサーバー ──▶ ComfyUI (SAM 3.1)
 Quest : マスクに写っていた深度の点を表示 ◀──(WebSocket)── PC : 物体ごとのマスク画像
 ```
+
+## デモ動画
+
+| シーン | 動画 |
+|---|---|
+| `0-SpatialSearchLite` : 検索した物をピンクの点群で表示 | [YouTube](https://youtu.be/CpNNvYJ_eqo) |
+| `1-SpatialSearchLiteGrab` : 見つけた物をつかんで動かす | [YouTube](https://youtu.be/KBflmsotNTc) |
+| `2-SpatialSearchLiteFrame(Experimental)` : 指の枠で物体をコピーする | [YouTube](https://youtu.be/BAKXGBKgiSI) |
 
 ## 必要なもの
 
@@ -90,9 +98,9 @@ python server/server.py --host 0.0.0.0
 
 1. `UnityMetaQuest` フォルダを Unity で開きます
 2. 使うシーンを開きます
-   - `Assets/Scenes/SpatialSearchLite.unity` : 見つかった物をピンクの点群で表示します
-   - `Assets/Scenes/SpatialSearchLiteGrab.unity` : 見つかった物を、撮影したカメラ画像を貼った面で表示し、コントローラでつかんで動かせます（[6. 見つけた物をつかむ](#6-見つけた物をつかむspatialsearchlitegrab-シーン)）
-   - `Assets/Scenes/SpatialSearchLiteFrame.unity` : Grab シーンの機能に加えて、両手の指で作った枠で物体を指すと、その物体1つを複製します。複製は手でもつかめます（[7. 指の枠で物体をコピーする](#7-指の枠で物体をコピーするspatialsearchliteframe-シーン)）
+   - `Assets/Scenes/0-SpatialSearchLite.unity` : 見つかった物をピンクの点群で表示します
+   - `Assets/Scenes/1-SpatialSearchLiteGrab.unity` : 見つかった物を、撮影したカメラ画像を貼った面で表示し、コントローラでつかんで動かせます（[6. 見つけた物をつかむ](#6-見つけた物をつかむ1-spatialsearchlitegrab-シーン)）
+   - `Assets/Scenes/2-SpatialSearchLiteFrame(Experimental).unity` : Grab シーンの機能に加えて、両手の指で作った枠で物体を指すと、その物体1つを複製します。複製は手でもつかめます（[7. 指の枠で物体をコピーする](#7-指の枠で物体をコピーする2-spatialsearchliteframeexperimental-シーン)）
 3. Build Profiles のシーン一覧で、使うシーンにチェックを入れます
 4. Questへビルドして実行します
 
@@ -108,23 +116,23 @@ python server/server.py --host 0.0.0.0
 1. 左コントローラのパネルにある **Search** ボタンを右手のレイで押すと、検索ウィンドウが開きます（もう一度押すと閉じます）
 2. 検索ウィンドウに探したい物の名前を **英語で** 入力します（例: `monitor`、`chair`、`cup`）
 3. 探したい物の方を向いて、ウィンドウの **Search** を押します。ウィンドウは自動で閉じます
-4. 数秒後、見つかった物体の位置にピンクの点群が表示されます（`SpatialSearchLiteGrab` シーンでは撮影したカメラ画像を貼った面）。左コントローラのパネルに検索の状態と見つかった数が表示されます
+4. 数秒後、見つかった物体の位置にピンクの点群が表示されます（`1-SpatialSearchLiteGrab` シーンでは撮影したカメラ画像を貼った面）。左コントローラのパネルに検索の状態と見つかった数が表示されます
 
 別の物を探すときは、もう一度検索ウィンドウを開いて検索します。前の検索結果の点群は消えます。
 
-### 6. 見つけた物をつかむ（SpatialSearchLiteGrab シーン）
+### 6. 見つけた物をつかむ（1-SpatialSearchLiteGrab シーン）
 
-`SpatialSearchLiteGrab` シーンでは、見つかった物体ごとに別々の面になり、コントローラでつかんで動かせます。面には、撮影した瞬間のカメラ画像が貼ってあります。
+`1-SpatialSearchLiteGrab` シーンでは、見つかった物体ごとに別々の面になり、コントローラでつかんで動かせます。面には、撮影した瞬間のカメラ画像が貼ってあります。
 
 1. コントローラを物体に近づけます。つかめる距離に入ると、物体が白っぽくなります
 2. **グリップボタン**（中指で握るボタン）を握るとつかめます。つかんでいる間は物体が黄色がかります
 3. 握ったまま動かすと物体が付いてきます。離すとその場に残ります
 
-両手のコントローラで同じ物体をつかむと、大きさも変えられます。このシーンでは手（ハンドトラッキング）ではつかめません（`SpatialSearchLiteFrame` シーンでは手でもつかめます）。
+両手のコントローラで同じ物体をつかむと、大きさも変えられます。このシーンでは手（ハンドトラッキング）ではつかめません（`2-SpatialSearchLiteFrame(Experimental)` シーンでは手でもつかめます）。
 
-### 7. 指の枠で物体をコピーする（SpatialSearchLiteFrame シーン）
+### 7. 指の枠で物体をコピーする（2-SpatialSearchLiteFrame(Experimental) シーン）
 
-`SpatialSearchLiteFrame` シーンでは、両手で写真を撮るときの枠を作って物体を指すと、その物体1つだけを切り出し、撮影した位置に複製します。検索語は要りません。複製は手でもコントローラでもつかんで動かせます。
+`2-SpatialSearchLiteFrame(Experimental)` シーンでは、両手で写真を撮るときの枠を作って物体を指すと、その物体1つだけを切り出し、撮影した位置に複製します。検索語は要りません。複製は手でもコントローラでもつかんで動かせます。
 
 事前に Quest の **設定 > 動きのトラッキング > ハンドトラッキング** をオンにしてください。サーバーへの接続まではコントローラで操作し、そのあとコントローラを置きます。
 
@@ -150,12 +158,12 @@ python server/server.py --host 0.0.0.0
 | `Logic/Search` の Search Capture | Min / Max Depth Meters | この距離の範囲にある点だけを使います |
 | `Logic/WebSocket` の Search Client | Server Port | Pythonサーバーのポート |
 | `SearchWindow` / `ServerDialog` の Head Follow | Distance / Height Offset / Follow Speed | ウィンドウを出す距離・高さ、頭に追いつく速さ |
-| `Logic/SearchResultView`（SpatialSearchLite） | Color / Point Size | 結果の点の色と大きさ |
-| `Logic/SearchResultView`（SpatialSearchLiteGrab） | Outlier Ratio / Min Collider Size | つかめる範囲の箱を決めるときに外す端の点の割合と、箱の最小の大きさ |
+| `Logic/SearchResultView`（0-SpatialSearchLite） | Color / Point Size | 結果の点の色と大きさ |
+| `Logic/SearchResultView`（1-SpatialSearchLiteGrab） | Outlier Ratio / Min Collider Size | つかめる範囲の箱を決めるときに外す端の点の割合と、箱の最小の大きさ |
 | `Packages/SpatialSearch/Materials/SpatialSearchColoredPointsMat`（Project ウィンドウでは Packages > SpatialSearch） | Depth Tolerance | 重なった板を同じ面として描く奥行きの幅（板の大きさの何倍か）。ちらつくときは上げ、後ろの板が透けて見えるときは下げます |
 | 〃 | Fade Start / Fade End | 物体の正面（点群から求めた面の向き）と今の視点の向きの内積（1=正面から、0=真横、負=裏側）。Fade Start 以上で不透明、Fade End 以下で完全に透明、その間はなめらかに変えます。もっと横から見ても見えるようにするときは Fade End を下げます |
 | `Assets/Prefabs/GrabbableSearchResult` の Interactable Color Visual | Hover / Select Color State | 近づけた・つかんだときに重ねる色（Aが重ねる強さ） |
-| `Logic/FrameCopy` の Frame Copy Controller（SpatialSearchLiteFrame） | Stable Angle / Lock Seconds | 点がこの角度（度）以内に止まっている時間がこの秒数になると、ロックします |
+| `Logic/FrameCopy` の Frame Copy Controller（2-SpatialSearchLiteFrame(Experimental)） | Stable Angle / Lock Seconds | 点がこの角度（度）以内に止まっている時間がこの秒数になると、ロックします |
 | 〃 | Hands Gone Seconds / Lower Hands Timeout | 両手がカメラ画像から消えてから撮影するまでの時間と、ロックしてから手を下ろすのを待つ時間（秒） |
 | 〃 | Result Timeout | サーバーの結果を待つ時間（秒）。過ぎると次の操作を受け付けます |
 | 〃 | Dot Angle / Ring Angle / Aim / Edge / Locked Color | 点とリングの見た目の大きさ（度）と、狙っているとき・縁を指しているとき・ロックしたときの色 |
@@ -170,7 +178,7 @@ python server/server.py --host 0.0.0.0
 | `was not found` になる | 検索語を英語の一般的な名前にする、物体に近づく、`--threshold` を下げる |
 | 点がずれて表示される | 検索中は頭を大きく動かさないでください。撮影した瞬間の位置で点群を作っています |
 | 物体が透けて見える・見えなくなる | 物体の正面（表面の向き）から離れて横や裏から見るほど透明にしています。表面を自分の方へ向け直すか、マテリアルの Fade Start / Fade End を調整してください |
-| 点群をつかめない | `SpatialSearchLiteGrab` / `SpatialSearchLiteFrame` シーンか確認し、コントローラを点群の中まで入れてからグリップボタンを握ってください。手でつかめるのは `SpatialSearchLiteFrame` シーンだけです |
+| 点群をつかめない | `1-SpatialSearchLiteGrab` / `2-SpatialSearchLiteFrame(Experimental)` シーンか確認し、コントローラを点群の中まで入れてからグリップボタンを握ってください。手でつかめるのは `2-SpatialSearchLiteFrame(Experimental)` シーンだけです |
 | 指で枠を作っても白い四角が出ない | ハンドトラッキングがオンで、コントローラを手から離しているか確認してください。左手が左上・右手が右下で、人差し指が横、親指が縦（左手は下、右手は上）になっているかも確かめてください |
 | 枠は出るが点が出ない | 枠の先にある物までの距離が、Search Capture の Min / Max Depth Meters（既定は 0.1〜5m）の範囲にあるか確認してください |
 | `Copying...` のまま進まない | 検索語での検索の結果待ちと重なると、撮影が無視されます。30秒で元に戻るので、やり直してください |
@@ -186,16 +194,16 @@ Unity側のスクリプトは2か所に分かれています。
 
 パッケージは `WebSocketSharpUtl` と同じく、`UnityMetaQuest/Packages/manifest.json` から `file:../../Packages/SpatialSearch` で読み込んでいます。使い方は [Packages/SpatialSearch/README.md](Packages/SpatialSearch/README.md) にあります。
 
-`MainCoordinator` が3つのクラスに同じ `SpatialSearchDataSource` を渡し、各クラスはそこに流れてくるデータを受け取って動きます。ボタンや入力欄などUIの操作は `MainCoordinator` がまとめて受け持ち、3つのクラスはUIを知りません。`SpatialSearchLiteFrame` シーンでは、手の枠を扱う `FrameCopyController` も加わります。
+`MainCoordinator` が3つのクラスに同じ `SpatialSearchDataSource` を渡し、各クラスはそこに流れてくるデータを受け取って動きます。ボタンや入力欄などUIの操作は `MainCoordinator` がまとめて受け持ち、3つのクラスはUIを知りません。`2-SpatialSearchLiteFrame(Experimental)` シーンでは、手の枠を扱う `FrameCopyController` も加わります。
 
 | クラス | 役割 |
 |---|---|
 | `MainCoordinator` | 3つのクラスをつなぎ、UIの操作（IPダイアログ、検索ウィンドウの開閉、検索の開始）と、コントローラのパネルの状態表示（検索中・見つかった数・エラー）を受け持ちます |
 | `SearchCapture` | `Capture(検索語)` が呼ばれたらカメラ画像と深度を撮影します。深度の各点が画像のどこに写るか（UV）と、その点での面の向き（法線）も求めて `SetCapture` します。`CaptureAt(位置)` で撮影すると、その位置が画像のどこに写るかも撮影データに入れます（点で探す）。手の枠のために、深度へ向けたレイキャストもします |
 | `SearchClient` | 撮影データを受け取ったら、画像と検索語（点で探すときは画像上の点）をサーバーへ送ります。返ってきたマスクを `SetResult` します |
-| `FrameCopyController` | 両手の枠の形を判定し、頭から枠の中心へのレイが深度に当たった位置に点を出します。点がロックされたら、手が下りるのを待って `SearchCapture.CaptureAt` で撮影します（SpatialSearchLiteFrame シーン） |
-| `SearchResultView` | マスクの白い部分に写っていた点だけを集めて、まとめて単色で表示します（SpatialSearchLite シーン） |
-| `GrabbableSearchResultView` | 見つかった物体ごとにひな形のプレハブ `GrabbableSearchResult` を複製し、物体の点を、撮影したカメラ画像を貼った四角形で表示します。つかめる範囲の箱も物体に合わせます（SpatialSearchLiteGrab シーン。SpatialSearchLiteFrame シーンではひな形が `GrabbableCopy`） |
+| `FrameCopyController` | 両手の枠の形を判定し、頭から枠の中心へのレイが深度に当たった位置に点を出します。点がロックされたら、手が下りるのを待って `SearchCapture.CaptureAt` で撮影します（2-SpatialSearchLiteFrame(Experimental) シーン） |
+| `SearchResultView` | マスクの白い部分に写っていた点だけを集めて、まとめて単色で表示します（0-SpatialSearchLite シーン） |
+| `GrabbableSearchResultView` | 見つかった物体ごとにひな形のプレハブ `GrabbableSearchResult` を複製し、物体の点を、撮影したカメラ画像を貼った四角形で表示します。つかめる範囲の箱も物体に合わせます（1-SpatialSearchLiteGrab シーン。2-SpatialSearchLiteFrame(Experimental) シーンではひな形が `GrabbableCopy`） |
 | `SearchResultMeshBuilder` | `GrabbableSearchResultView` が使う部品です。点（深度の1画素）ごとに、その画素が写している範囲の四角形を作り、四隅をカメラ画像へ投影してUVにします |
 
 画像は点ごとに1色を割り当てるのではなく、四角形の中でカメラ画像の画素そのものを引いて貼っています（シェーダーはパッケージの `SpatialSearchColoredPointsURP`）。そのため、近づいても粗いドットにはなりません。
@@ -204,7 +212,7 @@ Unity側のスクリプトは2か所に分かれています。
 
 そこで、物体の正面から離れて見るほど物体を透明にしています。正面は点群から求めた面の向きで（本や画面なら表面の向き）、それと今の視点から見た向きの内積で決めていて、真横ではほとんど透明に、裏側からは見えなくなります。撮影したカメラの方向ではなく面の向きを基準にしているので、机の上の本のように斜めから撮った物でも、表面を自分に向けた姿勢から上下左右のどちらへ傾けても、同じ角度で透けていきます。物体をつかんで動かしたり回したりすると、正面も物体と一緒に動くので、表面を自分の方へ向け直せば再び見えます。
 
-つかむ仕組みは Meta XR Interaction SDK の部品をそのまま使っています。プレハブ `GrabbableSearchResult` に `Grabbable` / `GrabFreeTransformer` / `GrabInteractable` が付いていて、シーンのインタラクションリグにあるコントローラの `ControllerGrabInteractor` からつかめます。`SpatialSearchLiteFrame` シーンのプレハブ `GrabbableCopy` には `HandGrabInteractable` も付いていて、手の `HandGrabInteractor` からもつかめます。
+つかむ仕組みは Meta XR Interaction SDK の部品をそのまま使っています。プレハブ `GrabbableSearchResult` に `Grabbable` / `GrabFreeTransformer` / `GrabInteractable` が付いていて、シーンのインタラクションリグにあるコントローラの `ControllerGrabInteractor` からつかめます。`2-SpatialSearchLiteFrame(Experimental)` シーンのプレハブ `GrabbableCopy` には `HandGrabInteractable` も付いていて、手の `HandGrabInteractor` からもつかめます。
 
 手の枠で指した点は、実世界の位置（深度にレイが当たった位置）として覚えます。手を下ろしてから撮影した画像へこの位置を投影し直すので、枠を作った手は撮影した画像に写りません。レイは頭の中心から引くので、両目で見ている枠の中心とは少しずれますが、点を見ながら物体に合わせれば気になりません。
 
