@@ -2,7 +2,7 @@ Shader "SpatialSearch/URP/Highlight Points"
 {
     Properties
     {
-        _Color ("Color", Color) = (1, 0, 1, 1)
+        _Color ("Color", Color) = (1, 0.95, 0, 1)
         _PointSize ("Point Size", Float) = 6.0
     }
 

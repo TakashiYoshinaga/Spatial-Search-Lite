@@ -15,7 +15,7 @@ Quest : マスクに写っていた深度の点を表示 ◀──(WebSocket)─
 
 | シーン | 動画 |
 |---|---|
-| `0-SpatialSearchLite` : 検索した物をピンクの点群で表示 | [YouTube](https://youtu.be/CpNNvYJ_eqo) |
+| `0-SpatialSearchLite` : 検索した物を単色の点群で表示 | [YouTube](https://youtu.be/CpNNvYJ_eqo) |
 | `1-SpatialSearchLiteGrab` : 見つけた物をつかんで動かす | [YouTube](https://youtu.be/KBflmsotNTc) |
 | `2-SpatialSearchLiteFrame(Experimental)` : 指の枠で物体をコピーする | [YouTube](https://youtu.be/BAKXGBKgiSI) |
 
@@ -98,7 +98,7 @@ python server/server.py --host 0.0.0.0
 
 1. `UnityMetaQuest` フォルダを Unity で開きます
 2. 使うシーンを開きます
-   - `Assets/Scenes/0-SpatialSearchLite.unity` : 見つかった物をピンクの点群で表示します
+   - `Assets/Scenes/0-SpatialSearchLite.unity` : 見つかった物を、指定した単色（既定は黄色）の点群で表示します
    - `Assets/Scenes/1-SpatialSearchLiteGrab.unity` : 見つかった物を、撮影したカメラ画像を貼った面で表示し、コントローラでつかんで動かせます（[6. 見つけた物をつかむ](#6-見つけた物をつかむ1-spatialsearchlitegrab-シーン)）
    - `Assets/Scenes/2-SpatialSearchLiteFrame(Experimental).unity` : Grab シーンの機能に加えて、両手の指で作った枠で物体を指すと、その物体1つを複製します。複製は手でもつかめます（[7. 指の枠で物体をコピーする](#7-指の枠で物体をコピーする2-spatialsearchliteframeexperimental-シーン)）
 3. Build Profiles のシーン一覧で、使うシーンにチェックを入れます
@@ -116,7 +116,7 @@ python server/server.py --host 0.0.0.0
 1. 左コントローラのパネルにある **Search** ボタンを右手のレイで押すと、検索ウィンドウが開きます（もう一度押すと閉じます）
 2. 検索ウィンドウに探したい物の名前を **英語で** 入力します（例: `monitor`、`chair`、`cup`）
 3. 探したい物の方を向いて、ウィンドウの **Search** を押します。ウィンドウは自動で閉じます
-4. 数秒後、見つかった物体の位置にピンクの点群が表示されます（`1-SpatialSearchLiteGrab` シーンでは撮影したカメラ画像を貼った面）。左コントローラのパネルに検索の状態と見つかった数が表示されます
+4. 数秒後、見つかった物体の位置に単色（既定は黄色）の点群が表示されます（`1-SpatialSearchLiteGrab` シーンでは撮影したカメラ画像を貼った面）。左コントローラのパネルに検索の状態と見つかった数が表示されます
 
 別の物を探すときは、もう一度検索ウィンドウを開いて検索します。前の検索結果の点群は消えます。
 
@@ -125,8 +125,8 @@ python server/server.py --host 0.0.0.0
 `1-SpatialSearchLiteGrab` シーンでは、見つかった物体ごとに別々の面になり、コントローラでつかんで動かせます。面には、撮影した瞬間のカメラ画像が貼ってあります。
 
 1. コントローラを物体に近づけます。つかめる距離に入ると、物体が白っぽくなります
-2. **グリップボタン**（中指で握るボタン）を握るとつかめます。つかんでいる間は物体が黄色がかります
-3. 握ったまま動かすと物体が付いてきます。離すとその場に残ります
+2. **トリガーボタン**（人差し指で引くボタン）を引くとつかめます。つかんでいる間は物体が黄色がかります
+3. 引いたまま動かすと物体が付いてきます。離すとその場に残ります
 
 両手のコントローラで同じ物体をつかむと、大きさも変えられます。このシーンでは手（ハンドトラッキング）ではつかめません（`2-SpatialSearchLiteFrame(Experimental)` シーンでは手でもつかめます）。
 
@@ -158,7 +158,7 @@ python server/server.py --host 0.0.0.0
 | `Logic/Search` の Search Capture | Min / Max Depth Meters | この距離の範囲にある点だけを使います |
 | `Logic/WebSocket` の Search Client | Server Port | Pythonサーバーのポート |
 | `SearchWindow` / `ServerDialog` の Head Follow | Distance / Height Offset / Follow Speed | ウィンドウを出す距離・高さ、頭に追いつく速さ |
-| `Logic/SearchResultView`（0-SpatialSearchLite） | Color / Point Size | 結果の点の色と大きさ |
+| `Logic/SearchResultView`（0-SpatialSearchLite） | Color / Point Size | 結果の点の色（既定は黄色）と大きさ |
 | `Logic/SearchResultView`（1-SpatialSearchLiteGrab） | Outlier Ratio / Min Collider Size | つかめる範囲の箱を決めるときに外す端の点の割合と、箱の最小の大きさ |
 | `Packages/SpatialSearch/Materials/SpatialSearchColoredPointsMat`（Project ウィンドウでは Packages > SpatialSearch） | Depth Tolerance | 重なった板を同じ面として描く奥行きの幅（板の大きさの何倍か）。ちらつくときは上げ、後ろの板が透けて見えるときは下げます |
 | 〃 | Fade Start / Fade End | 物体の正面（点群から求めた面の向き）と今の視点の向きの内積（1=正面から、0=真横、負=裏側）。Fade Start 以上で不透明、Fade End 以下で完全に透明、その間はなめらかに変えます。もっと横から見ても見えるようにするときは Fade End を下げます |
@@ -178,7 +178,7 @@ python server/server.py --host 0.0.0.0
 | `was not found` になる | 検索語を英語の一般的な名前にする、物体に近づく、`--threshold` を下げる |
 | 点がずれて表示される | 検索中は頭を大きく動かさないでください。撮影した瞬間の位置で点群を作っています |
 | 物体が透けて見える・見えなくなる | 物体の正面（表面の向き）から離れて横や裏から見るほど透明にしています。表面を自分の方へ向け直すか、マテリアルの Fade Start / Fade End を調整してください |
-| 点群をつかめない | `1-SpatialSearchLiteGrab` / `2-SpatialSearchLiteFrame(Experimental)` シーンか確認し、コントローラを点群の中まで入れてからグリップボタンを握ってください。手でつかめるのは `2-SpatialSearchLiteFrame(Experimental)` シーンだけです |
+| 点群をつかめない | `1-SpatialSearchLiteGrab` / `2-SpatialSearchLiteFrame(Experimental)` シーンか確認し、コントローラを点群の中まで入れてからトリガーボタンを引いてください。手でつかめるのは `2-SpatialSearchLiteFrame(Experimental)` シーンだけです |
 | 指で枠を作っても白い四角が出ない | ハンドトラッキングがオンで、コントローラを手から離しているか確認してください。左手が左上・右手が右下で、人差し指が横、親指が縦（左手は下、右手は上）になっているかも確かめてください |
 | 枠は出るが点が出ない | 枠の先にある物までの距離が、Search Capture の Min / Max Depth Meters（既定は 0.1〜5m）の範囲にあるか確認してください |
 | `Copying...` のまま進まない | 検索語での検索の結果待ちと重なると、撮影が無視されます。30秒で元に戻るので、やり直してください |

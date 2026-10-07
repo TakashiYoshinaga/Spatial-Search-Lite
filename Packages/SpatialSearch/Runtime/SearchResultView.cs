@@ -14,7 +14,7 @@ namespace SpatialSearch
         static readonly int PointSizeId = Shader.PropertyToID("_PointSize");
 
         [SerializeField] Material _pointMaterial;
-        [SerializeField] Color _color = new Color(1f, 0f, 1f, 1f);
+        [SerializeField] Color _color = new Color(1f, 0.95f, 0f, 1f); // 黄色。マゼンタはマテリアルエラーに見えて紛らわしいので使わない
         [SerializeField, Min(1f)] float _pointSize = 6f;
 
         MeshRenderer _meshRenderer;
