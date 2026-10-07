@@ -17,6 +17,7 @@
     "com.unity.visualscripting": "1.9.9",
     "com.unity.xr.meta-openxr": "2.3.0",
     "com.unity.xr.openxr": "1.16.1",
+    "com.yoshinaga.spatialsearch": "file:../../Packages/SpatialSearch",
     "com.yoshinaga.websocketsharputl": "file:../../Packages/WebSocketSharpUtl",
     "org.nuget.observablecollections": "3.3.4",
     "org.nuget.observablecollections.r3": "3.3.4",

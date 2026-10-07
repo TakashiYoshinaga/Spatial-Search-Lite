@@ -3989,7 +3989,6 @@ MonoBehaviour:
   _objectTemplate: {fileID: 997471924078547109, guid: 1afb71918aedc9247a0a7f7805f319c6, type: 3}
   _outlierRatio: 0.05
   _minColliderSize: 0.05
-  _statusText: {fileID: 534299017}
 --- !u!1 &2030511578
 GameObject:
   m_ObjectHideFlags: 0
@@ -4555,6 +4554,7 @@ MonoBehaviour:
   _queryInput: {fileID: 660253325}
   _searchButton: {fileID: 2066642784}
   _toggleSearchWindowButton: {fileID: 281078670}
+  _statusText: {fileID: 534299017}
 --- !u!4 &2091450410
 Transform:
   m_ObjectHideFlags: 0

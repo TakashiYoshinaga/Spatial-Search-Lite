@@ -152,7 +152,7 @@ python server/server.py --host 0.0.0.0
 | `SearchWindow` / `ServerDialog` の Head Follow | Distance / Height Offset / Follow Speed | ウィンドウを出す距離・高さ、頭に追いつく速さ |
 | `Logic/SearchResultView`（SpatialSearchLite） | Color / Point Size | 結果の点の色と大きさ |
 | `Logic/SearchResultView`（SpatialSearchLiteGrab） | Outlier Ratio / Min Collider Size | つかめる範囲の箱を決めるときに外す端の点の割合と、箱の最小の大きさ |
-| `Assets/Materials/SpatialSearchColoredPointsMat` | Depth Tolerance | 重なった板を同じ面として描く奥行きの幅（板の大きさの何倍か）。ちらつくときは上げ、後ろの板が透けて見えるときは下げます |
+| `Packages/SpatialSearch/Materials/SpatialSearchColoredPointsMat`（Project ウィンドウでは Packages > SpatialSearch） | Depth Tolerance | 重なった板を同じ面として描く奥行きの幅（板の大きさの何倍か）。ちらつくときは上げ、後ろの板が透けて見えるときは下げます |
 | 〃 | Fade Start / Fade End | 物体の正面（点群から求めた面の向き）と今の視点の向きの内積（1=正面から、0=真横、負=裏側）。Fade Start 以上で不透明、Fade End 以下で完全に透明、その間はなめらかに変えます。もっと横から見ても見えるようにするときは Fade End を下げます |
 | `Assets/Prefabs/GrabbableSearchResult` の Interactable Color Visual | Hover / Select Color State | 近づけた・つかんだときに重ねる色（Aが重ねる強さ） |
 | `Logic/FrameCopy` の Frame Copy Controller（SpatialSearchLiteFrame） | Stable Angle / Lock Seconds | 点がこの角度（度）以内に止まっている時間がこの秒数になると、ロックします |
@@ -177,11 +177,20 @@ python server/server.py --host 0.0.0.0
 
 ## しくみ
 
-Unity側のスクリプトは `UnityMetaQuest/Assets/Scripts/SpatialSearchLite/` にあります。`MainCoordinator` が3つのクラスに同じ `SpatialSearchDataSource` を渡し、各クラスはそこに流れてくるデータを受け取って動きます。ボタンや入力欄などUIの操作は `MainCoordinator` がまとめて受け持ち、3つのクラスはUIを知りません。`SpatialSearchLiteFrame` シーンでは、手の枠を扱う `FrameCopyController` も加わります。
+Unity側のスクリプトは2か所に分かれています。
+
+| 場所 | 中身 |
+|---|---|
+| `Packages/SpatialSearch/`（パッケージ `com.yoshinaga.spatialsearch`、名前空間 `SpatialSearch`） | 他のプロジェクトでも使える部分: `SpatialSearchDataSource`、撮影データと検索結果の型（`SearchData`）、`SearchClient`、結果の表示（`SearchResultView` / `GrabbableSearchResultView` / `SearchResultMeshBuilder`）、シェーダーとマテリアル |
+| `UnityMetaQuest/Assets/Scripts/SpatialSearchLite/` | このプロジェクト（Meta Quest）固有の部分: `MainCoordinator`、`SearchCapture`、`FrameCopyController`、`HeadFollow` |
+
+パッケージは `WebSocketSharpUtl` と同じく、`UnityMetaQuest/Packages/manifest.json` から `file:../../Packages/SpatialSearch` で読み込んでいます。使い方は [Packages/SpatialSearch/README.md](Packages/SpatialSearch/README.md) にあります。
+
+`MainCoordinator` が3つのクラスに同じ `SpatialSearchDataSource` を渡し、各クラスはそこに流れてくるデータを受け取って動きます。ボタンや入力欄などUIの操作は `MainCoordinator` がまとめて受け持ち、3つのクラスはUIを知りません。`SpatialSearchLiteFrame` シーンでは、手の枠を扱う `FrameCopyController` も加わります。
 
 | クラス | 役割 |
 |---|---|
-| `MainCoordinator` | 3つのクラスをつなぎ、UIの操作（IPダイアログ、検索ウィンドウの開閉、検索の開始）を受け持ちます |
+| `MainCoordinator` | 3つのクラスをつなぎ、UIの操作（IPダイアログ、検索ウィンドウの開閉、検索の開始）と、コントローラのパネルの状態表示（検索中・見つかった数・エラー）を受け持ちます |
 | `SearchCapture` | `Capture(検索語)` が呼ばれたらカメラ画像と深度を撮影します。深度の各点が画像のどこに写るか（UV）と、その点での面の向き（法線）も求めて `SetCapture` します。`CaptureAt(位置)` で撮影すると、その位置が画像のどこに写るかも撮影データに入れます（点で探す）。手の枠のために、深度へ向けたレイキャストもします |
 | `SearchClient` | 撮影データを受け取ったら、画像と検索語（点で探すときは画像上の点）をサーバーへ送ります。返ってきたマスクを `SetResult` します |
 | `FrameCopyController` | 両手の枠の形を判定し、頭から枠の中心へのレイが深度に当たった位置に点を出します。点がロックされたら、手が下りるのを待って `SearchCapture.CaptureAt` で撮影します（SpatialSearchLiteFrame シーン） |
@@ -189,7 +198,7 @@ Unity側のスクリプトは `UnityMetaQuest/Assets/Scripts/SpatialSearchLite/`
 | `GrabbableSearchResultView` | 見つかった物体ごとにひな形のプレハブ `GrabbableSearchResult` を複製し、物体の点を、撮影したカメラ画像を貼った四角形で表示します。つかめる範囲の箱も物体に合わせます（SpatialSearchLiteGrab シーン。SpatialSearchLiteFrame シーンではひな形が `GrabbableCopy`） |
 | `SearchResultMeshBuilder` | `GrabbableSearchResultView` が使う部品です。点（深度の1画素）ごとに、その画素が写している範囲の四角形を作り、四隅をカメラ画像へ投影してUVにします |
 
-画像は点ごとに1色を割り当てるのではなく、四角形の中でカメラ画像の画素そのものを引いて貼っています（シェーダーは `SpatialSearchColoredPointsURP`）。そのため、近づいても粗いドットにはなりません。
+画像は点ごとに1色を割り当てるのではなく、四角形の中でカメラ画像の画素そのものを引いて貼っています（シェーダーはパッケージの `SpatialSearchColoredPointsURP`）。そのため、近づいても粗いドットにはなりません。
 
 四角形はシェーダーが毎フレーム視点の方へ向けるので（ビルボード）、物体を傾けても板は常にこちらを向きます。四隅と画像の対応は撮影したときのままなので、撮影した向きから見るとぴったり合い、大きく傾けると貼った画像が少しずれて見えます。
 

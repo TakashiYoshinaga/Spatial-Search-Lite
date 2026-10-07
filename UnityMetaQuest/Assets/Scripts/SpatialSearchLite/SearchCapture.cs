@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using Meta.XR;
 using Meta.XR.BuildingBlocks.AIBlocks;
+using SpatialSearch;
 using UnityEngine;
 
 // 画像を取得するクラス。

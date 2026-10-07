@@ -1,4 +1,5 @@
 using R3;
+using SpatialSearch;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -13,6 +14,7 @@ using UnityEngine.UI;
 //   起動 → サーバーIPダイアログ（前回のIPを入れておく）→ Connect → 接続できたら閉じる
 //   コントローラの Search → 検索ウィンドウの表示/非表示（ウィンドウは頭に追従）
 //   検索ウィンドウの Search → 撮影して検索し、ウィンドウを閉じる
+//   コントローラの状態表示 → 検索中・見つかった数・エラーを出す（結果を表示するクラスが知らせる数から作る）
 //
 // デモなので、接続の入り口は起動直後のダイアログだけにしている。
 // 接続できなかった場合はダイアログが開いたまま残るので、IPを直して Connect し直せる。
@@ -41,16 +43,26 @@ public class MainCoordinator : MonoBehaviour
 
     [Header("Controller")]
     [SerializeField] Button _toggleSearchWindowButton;
+    [Tooltip("検索中・結果の文字表示（任意）。日本語フォントが無いので表示文は英語")]
+    [SerializeField] TMP_Text _statusText;
 
     SpatialSearchDataSource _dataSource = new SpatialSearchDataSource();
 
     void Awake()
     {
-        // ResultView は Client より先に初期化する。
-        // 未接続のとき Client は撮影を受け取った直後にエラー結果を流すので、
-        // ResultView の「検索中」表示がエラー表示を上書きしないようにするため。
         _capture.Initialize(_dataSource);
         _resultView.Initialize(_dataSource);
+
+        // 状態の表示は Client より先に購読する。
+        // 未接続のとき Client は撮影を受け取った直後にエラー結果を流すので、
+        // 「検索中」の表示がエラーの表示を上書きしないようにするため。
+        _dataSource.CaptureObservable
+            .Subscribe(capture => SetStatus($"Searching \"{capture.Query}\"..."))
+            .AddTo(this);
+        _resultView.ShownObservable
+            .Subscribe(ShowResultStatus)
+            .AddTo(this);
+
         _client.Initialize(_dataSource);
         if (_frameCopy != null) _frameCopy.Initialize(_dataSource, _capture);
 
@@ -106,5 +118,22 @@ public class MainCoordinator : MonoBehaviour
         {
             _searchWindow.SetActive(false);
         }
+    }
+
+    void ShowResultStatus(ShownResult shown)
+    {
+        var result = shown.Result;
+        var query = result.Capture.Query;
+        if (!result.IsSuccess)
+        {
+            SetStatus($"Error: {result.Error}");
+            return;
+        }
+        SetStatus(shown.ObjectCount == 0 ? $"\"{query}\" was not found" : $"Found {shown.ObjectCount} \"{query}\"");
+    }
+
+    void SetStatus(string message)
+    {
+        if (_statusText != null) _statusText.text = message;
     }
 }

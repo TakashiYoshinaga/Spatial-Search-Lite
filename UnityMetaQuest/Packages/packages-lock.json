@@ -434,6 +434,12 @@
       },
       "url": "https://packages.unity.com"
     },
+    "com.yoshinaga.spatialsearch": {
+      "version": "file:../../Packages/SpatialSearch",
+      "depth": 0,
+      "source": "local",
+      "dependencies": {}
+    },
     "com.yoshinaga.websocketsharputl": {
       "version": "file:../../Packages/WebSocketSharpUtl",
       "depth": 0,

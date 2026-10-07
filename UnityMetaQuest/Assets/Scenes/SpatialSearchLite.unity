@@ -4048,7 +4048,6 @@ MonoBehaviour:
   _pointMaterial: {fileID: 2100000, guid: 3f8a6c21d4b74e14a9c5027be6135dd9, type: 2}
   _color: {r: 1, g: 0.9538098, b: 0, a: 1}
   _pointSize: 6
-  _statusText: {fileID: 534299017}
 --- !u!1 &2030511578
 GameObject:
   m_ObjectHideFlags: 0
@@ -4614,6 +4613,7 @@ MonoBehaviour:
   _queryInput: {fileID: 660253325}
   _searchButton: {fileID: 2066642784}
   _toggleSearchWindowButton: {fileID: 281078670}
+  _statusText: {fileID: 534299017}
 --- !u!4 &2091450410
 Transform:
   m_ObjectHideFlags: 0
