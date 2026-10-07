@@ -58,7 +58,7 @@ public class MainCoordinator : MonoBehaviour
             _searchWindow == null || _queryInput == null || _searchButton == null ||
             _toggleSearchWindowButton == null)
         {
-            Debug.LogError("[MainCoordinator] UIの参照が設定されていません。Tools > Spatial Search Lite > Build UI を実行してシーンを保存してください", this);
+            Debug.LogError("[MainCoordinator] UIの参照が設定されていません。Inspector で Server Dialog / Search Window / Controller の項目を設定してください", this);
             return;
         }
 
