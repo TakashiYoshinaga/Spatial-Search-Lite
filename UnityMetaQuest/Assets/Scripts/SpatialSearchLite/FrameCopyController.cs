@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Oculus.Interaction.Input;
 using R3;
 using SpatialSearch;
@@ -25,7 +26,7 @@ public class FrameCopyController : MonoBehaviour
         Waiting, // サーバーの結果を待っている
     }
 
-    [Tooltip("手の関節の取得元。空なら起動時にシーンから探す")]
+    [Tooltip("手の関節の取得元。空なら起動時にシーンから探す（ふつうは空のままでよい）")]
     [SerializeField] Hand _leftHand;
     [SerializeField] Hand _rightHand;
 
@@ -78,6 +79,12 @@ public class FrameCopyController : MonoBehaviour
     Vector3 _stableDirection;
     float _stableSince = -1f;
 
+    // 手の候補と、最後に枠を作った手
+    Hand[] _leftHands;
+    Hand[] _rightHands;
+    Hand _frameLeftHand;
+    Hand _frameRightHand;
+
     // Locked
     Vector3 _lockedPoint;
     float _handsGoneSince = -1f;
@@ -108,9 +115,9 @@ public class FrameCopyController : MonoBehaviour
 
     void Start()
     {
-        if (_leftHand == null) _leftHand = FindHand(Handedness.Left);
-        if (_rightHand == null) _rightHand = FindHand(Handedness.Right);
-        if (_leftHand == null || _rightHand == null)
+        _leftHands = _leftHand != null ? new[] { _leftHand } : FindHands(Handedness.Left);
+        _rightHands = _rightHand != null ? new[] { _rightHand } : FindHands(Handedness.Right);
+        if (_leftHands.Length == 0 || _rightHands.Length == 0)
         {
             Debug.LogError("[FrameCopyController] 手（Hand）が見つかりません。インタラクションリグがシーンにあるか確認してください", this);
         }
@@ -119,19 +126,30 @@ public class FrameCopyController : MonoBehaviour
         HideAll();
     }
 
-    // リグの中から、指定した側の手のデータ（Hand）を探す。つかんだときに指の形が変わる SyntheticHand は使わない。
-    static Hand FindHand(Handedness handedness)
+    // リグの中から、指定した側の手のデータ（Hand）の候補をすべて集める。
+    // インタラクションリグには、手の追跡で動く手のほかに、コントローラの姿勢から作った手（OVRControllerDrivenHands）もあり、
+    // どちらも同じ Hand なので見分けにくい。そこで候補をすべて持っておき、実際にL字になった手を使う（コントローラから作った手はL字にならない）。
+    // つかんだときに指の形が変わる SyntheticHand は使わない。
+    static Hand[] FindHands(Handedness handedness)
     {
+        var hands = new List<Hand>();
         foreach (var hand in FindObjectsByType<Hand>(FindObjectsSortMode.None))
         {
-            if (hand.GetType() == typeof(Hand) && hand.Handedness == handedness) return hand;
+            if (hand.GetType() != typeof(Hand) || hand.Handedness != handedness) continue;
+            hands.Add(hand);
+            Debug.Log($"[FrameCopyController] {handedness} hand candidate: {PathOf(hand.transform)}");
         }
-        return null;
+        return hands.ToArray();
+    }
+
+    static string PathOf(Transform t)
+    {
+        return t.parent == null ? t.name : PathOf(t.parent) + "/" + t.name;
     }
 
     void Update()
     {
-        if (_capture == null || _leftHand == null || _rightHand == null) return;
+        if (_capture == null || _leftHands == null || _leftHands.Length == 0 || _rightHands.Length == 0) return;
         if (_head == null)
         {
             if (Camera.main == null) return;
@@ -219,7 +237,8 @@ public class FrameCopyController : MonoBehaviour
             return;
         }
 
-        if (IsHandInImage(_leftHand) || IsHandInImage(_rightHand))
+        // 枠を作った手だけを見る（コントローラから作った手は、置いたコントローラの位置に写り続けることがあるため）。
+        if (IsHandInImage(_frameLeftHand) || IsHandInImage(_frameRightHand))
         {
             _handsGoneSince = -1f;
             return;
@@ -278,8 +297,8 @@ public class FrameCopyController : MonoBehaviour
     bool TryGetFrame(FrameThresholds t, out Vector3 leftCorner, out Vector3 rightCorner)
     {
         rightCorner = Vector3.zero;
-        if (!TryGetLCorner(_leftHand, t, out leftCorner, out var leftIndex, out var leftThumb) ||
-            !TryGetLCorner(_rightHand, t, out rightCorner, out var rightIndex, out var rightThumb))
+        if (!TryGetLCorner(_leftHands, t, out var leftHand, out leftCorner, out var leftIndex, out var leftThumb) ||
+            !TryGetLCorner(_rightHands, t, out var rightHand, out rightCorner, out var rightIndex, out var rightThumb))
         {
             return false;
         }
@@ -295,6 +314,9 @@ public class FrameCopyController : MonoBehaviour
         if (view.Flat(leftThumb).y > -t.MinFingerAlignment) return false;         // 左手の親指が下向き
         if (view.Flat(rightIndex).x > -t.MinFingerAlignment) return false;        // 右手の人差し指が左向き
         if (view.Flat(rightThumb).y < t.MinFingerAlignment) return false;         // 右手の親指が上向き
+
+        _frameLeftHand = leftHand;
+        _frameRightHand = rightHand;
         return true;
     }
 
@@ -370,6 +392,23 @@ public class FrameCopyController : MonoBehaviour
 
     // 枠の判定から外れても、この時間（秒）以内に戻れば枠を保つ。手の追跡が一瞬揺れたときに、確定までの時間をやり直さないため。
     const float FrameGraceSeconds = 0.3f;
+
+    // 候補の手のうち、L字になっている最初の手を探す。見つかった手（hand）と、その角・指の向きを返す。
+    static bool TryGetLCorner(Hand[] candidates, FrameThresholds t, out Hand hand,
+        out Vector3 corner, out Vector3 indexDirection, out Vector3 thumbDirection)
+    {
+        foreach (var candidate in candidates)
+        {
+            if (TryGetLCorner(candidate, t, out corner, out indexDirection, out thumbDirection))
+            {
+                hand = candidate;
+                return true;
+            }
+        }
+        hand = null;
+        corner = indexDirection = thumbDirection = Vector3.zero;
+        return false;
+    }
 
     // 親指と人差し指を伸ばし、中指を曲げた「L字」のとき true。
     // L字の角（親指と人差し指の付け根の間）と、人差し指・親指の向き（ワールド）を返す。
