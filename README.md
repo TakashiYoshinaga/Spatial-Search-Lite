@@ -7,7 +7,7 @@
 | 体験できること | デモ動画 |
 |---|---|
 | 言葉で探した物をハイライトする | [YouTube](https://youtu.be/CpNNvYJ_eqo) |
-| 見つけた物をつかんで動かす | [YouTube](https://youtu.be/KBflmsotNTc) |
+| 言葉で探した物をつかんで動かす | [YouTube](https://youtu.be/KBflmsotNTc) |
 | 指の枠で物をコピーする（実験機能） | [YouTube](https://youtu.be/BAKXGBKgiSI) |
 
 **体験には Meta Quest 3 / 3S と、AI処理を行うPCが必要です。** この手順では、リポジトリをPCに取得し、UnityでアプリをビルドしてQuestへインストールします。
