@@ -2,14 +2,14 @@
 
 カメラ画像から言葉や点で指定した物体を探し、深度の点群と組み合わせて表示する Unity パッケージです（`com.yoshinaga.spatialsearch`、名前空間 `SpatialSearch`）。
 
-物体を探す処理はPCのPythonサーバー（このリポジトリの `server/`、ComfyUI の SAM 3.1 を使用）が受け持ち、このパッケージはサーバーとの通信と、結果の表示を受け持ちます。カメラ画像と深度の撮影は機器ごとに違うので、使う側のプロジェクトで用意します（Meta Quest 用の例は `UnityMetaQuest/Assets/Scripts/SpatialSearchLite/SearchCapture.cs`）。
+物体を探す処理はPCのPythonサーバー（このリポジトリの `server/`、ComfyUI の SAM 3.1 を使用）が受け持ち、このパッケージは、サーバーへ送る内容の組み立てと返ってきた結果の受け取り、結果の表示を受け持ちます。カメラ画像と深度の撮影、サーバーとの通信（WebSocketなど）は機器や環境ごとに違うので、使う側のプロジェクトで用意します（Meta Quest 用の例は `UnityMetaQuest/Assets/Scripts/SpatialSearchLite/` の `SearchCapture.cs` と `WebSocketSearchTransport.cs`）。
 
 ボタンや文字などのUIは持ちません。検索の状態や見つかった数は Observable で知らせるので、表示の仕方は使う側で決めます。
 
 ```text
-撮影するクラス（プロジェクトで用意） ─CaptureData─▶ SearchClient ─WebSocket─▶ Python サーバー
-結果を表示するクラス               ◀─SearchResult─ SearchClient ◀─マスク画像─  Python サーバー
-                       （すべて SpatialSearchDataSource を通してやり取りする）
+撮影するクラス（プロジェクトで用意） ─CaptureData─▶ SearchClient ─JSON─▶ 通信路（プロジェクトで用意） ─▶ Python サーバー
+結果を表示するクラス               ◀─SearchResult─ SearchClient ◀─JSON─ 通信路（プロジェクトで用意） ◀─ Python サーバー
+              （撮影・結果・接続の状態は SpatialSearchDataSource を通してやり取りする）
 ```
 
 ## 必要なもの
@@ -17,10 +17,11 @@
 | パッケージ | 入れ方 |
 |---|---|
 | R3（`com.cysharp.r3` と `org.nuget.r3`） | OpenUPM と UnityNuGet の scoped registry から入れます。このパッケージの `package.json` には書けないので、使う側の `manifest.json` に追加してください |
-| WebSocketSharpUtl（`com.yoshinaga.websocketsharputl`） | このリポジトリの `Packages/WebSocketSharpUtl` を `file:` で読み込みます |
 | URP（`com.unity.render-pipelines.universal`） | シェーダーが URP 用です |
 
-`manifest.json` の例（パスは `manifest.json` から見た相対パス）:
+通信のライブラリには依存しません。通信路（`SearchTransportBase` を継承したクラス）が使うパッケージは、使う側で入れてください。
+
+`manifest.json` の例（パスは `manifest.json` から見た相対パス。2行目は、このリポジトリの WebSocket 版の通信路が使うパッケージです）:
 
 ```json
 "com.yoshinaga.spatialsearch": "file:../../Packages/SpatialSearch",
@@ -34,7 +35,8 @@
 | `SpatialSearchDataSource` | 各クラスの間でデータを受け渡す場所。撮影データ（`CaptureObservable`）、検索結果（`ResultObservable`）、接続の状態（`ConnectedObservable`）を流します |
 | `CaptureData` / `ImageProjection` | 撮影した瞬間のデータと、ワールド座標をカメラ画像のUVへ投影する計算（`SearchData.cs`） |
 | `SearchResult` / `Detection` | 検索結果。見つかった物体ごとのマスク画像（`SearchData.cs`） |
-| `SearchClient` | 撮影データを受け取ってサーバーへ送り、返ってきたマスクを検索結果にして流します。`WebSocketClientManager` が自動で付きます |
+| `SearchClient` | 撮影データを受け取ってJSONにし、通信路でサーバーへ送り、返ってきたマスクを検索結果にして流します。同じ GameObject にある通信路を自動で探します（別の GameObject にあるときは、Inspector の Transport に設定します） |
+| `SearchTransportBase` | サーバーとの通信路の共通の入り口。文字列の送受信と接続の状態だけを決めてあり、WebSocket や HTTP などの実装は使う側で継承して作ります（下の「通信路の実装」） |
 | `SearchResultViewBase` | 結果を表示するクラスの共通の入り口。表示し終えたら `ShownObservable` で、表示した結果と物体の数（`ShownResult`）を知らせます |
 | `SearchResultView` | マスクに写っていた点を、まとめて単色の点群で表示します |
 | `GrabbableSearchResultView` | 見つかった物体ごとにひな形を複製し、撮影したカメラ画像を貼った四角形で表示します。つかめる範囲（`BoxCollider`）も物体に合わせます |
@@ -45,10 +47,11 @@
 ## 使い方
 
 1. 撮影するクラスを用意し、`CaptureData` を作って `SpatialSearchDataSource.SetCapture` に流します（下の「撮影データの約束」）
-2. `SearchClient` と、結果を表示するクラス（`SearchResultView` か `GrabbableSearchResultView`）をシーンに置きます
-3. 起動時に、同じ `SpatialSearchDataSource` を各クラスの `Initialize` に渡します
-4. 状態を表示したいときは、`CaptureObservable`（検索を始めた）と `ShownObservable`（結果を表示し終えた）を購読します。**`SearchClient.Initialize` より先に購読してください**。未接続のとき `SearchClient` は撮影を受け取ったその場でエラー結果を流すので、後から購読すると「検索中」の表示がエラーの表示を上書きしてしまいます
-5. `SearchClient.Connect(サーバーのIP)` で接続します（ポートは Inspector の Server Port、既定は 8765）
+2. 通信路を用意します。`SearchTransportBase` を継承したクラスを作ります（下の「通信路の実装」）
+3. `SearchClient`、通信路、結果を表示するクラス（`SearchResultView` か `GrabbableSearchResultView`）をシーンに置きます。`SearchClient` と通信路は同じ GameObject に付けます
+4. 起動時に、同じ `SpatialSearchDataSource` を各クラスの `Initialize` に渡します（通信路には渡しません。`SearchClient` が通信路を使います）
+5. 状態を表示したいときは、`CaptureObservable`（検索を始めた）と `ShownObservable`（結果を表示し終えた）を購読します。**`SearchClient.Initialize` より先に購読してください**。未接続のとき `SearchClient` は撮影を受け取ったその場でエラー結果を流すので、後から購読すると「検索中」の表示がエラーの表示を上書きしてしまいます
+6. `SearchClient.Connect(サーバーのIP)` で接続します（ポートなど接続先の細かい設定は、通信路の実装が決めます。このリポジトリの WebSocket 版は Inspector の Server Port で、既定は 8765）
 
 ```csharp
 using SpatialSearch;
@@ -72,6 +75,23 @@ client.Connect("192.168.0.10");
 - `SearchResultView`: Point Material に `SpatialSearchHighlightMat` を設定します。Color / Point Size で点の色と大きさを変えられます
 - `GrabbableSearchResultView`: Object Template に、物体1つぶんのひな形を設定します。ひな形には `MeshFilter` と `MeshRenderer`（マテリアルは `SpatialSearchColoredPointsMat`）を付けます。つかめるようにするときは、つかむ仕組み（Meta XR Interaction SDK の `Grabbable` / `GrabInteractable` など）と `BoxCollider` もひな形に付けます。このパッケージはつかむ仕組みには依存しません
 
+### 通信路の実装
+
+`SearchTransportBase`（`MonoBehaviour`）を継承して、サーバーと文字列をやり取りするクラスを作ります。JSON の組み立てや結果の読み取り、検索中の管理は `SearchClient` が行うので、通信路は文字列を運ぶだけです。
+
+| 実装するもの | 内容 |
+|---|---|
+| `IsConnected` | 今つながっているか |
+| `Connect(serverIp)` | 指定したIPのサーバーへ接続します。接続中なら切断してから繋ぎ直します。ポートやURLの組み立ては実装側で決めます |
+| `Reconnect()` | 前回と同じサーバーへ繋ぎ直します。未接続のまま検索が始まったときに `SearchClient` が呼びます |
+| `Send(message, completed)` | 文字列を送り、送れたかどうかを `completed(true / false)` で必ず知らせます。`false` のとき `SearchClient` は検索を失敗として扱います |
+| `NotifyConnected(bool)` | 接続できたら `true`、切れたとき（接続に失敗したときも）`false` で呼びます |
+| `NotifyMessage(string)` | サーバーから文字列を受け取ったら呼びます |
+
+`NotifyConnected` / `NotifyMessage` と `completed` は、別スレッドから呼んでかまいません。メインスレッドへ戻す処理は `SearchClient` が行います。
+
+Meta Quest 用の WebSocket 版の例は `UnityMetaQuest/Assets/Scripts/SpatialSearchLite/WebSocketSearchTransport.cs` にあります（`WebSocketSharpUtl` の `WebSocketClientManager` を包んでいます）。
+
 ## 撮影データの約束（CaptureData）
 
 | 項目 | 内容 |
@@ -90,7 +110,7 @@ client.Connect("192.168.0.10");
 
 ## サーバーとの通信
 
-`server/server.py` との間で、JSON をWebSocketでやり取りします。
+`server/server.py` との間で、JSON の文字列をやり取りします。JSON を作って読むのは `SearchClient` で、運ぶのは通信路です。サーバーはWebSocketで待ち受けるので、このリポジトリの通信路はWebSocketです（HTTPなど別の方法にするときは、同じJSONをその方法で受け付けるサーバーも必要です）。
 
 | 向き | メッセージ |
 |---|---|

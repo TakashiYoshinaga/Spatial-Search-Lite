@@ -7,6 +7,7 @@ using UnityEngine.UI;
 // 3つのクラスに同じ DataSource を渡してつなぎ、UIの操作もここで受け持つ。
 //   SearchCapture    : Capture(query) で撮影 → DataSource.SetCapture
 //   SearchClient     : 撮影データをサーバーへ送る → 結果を DataSource.SetResult
+//                      （通信は同じ GameObject の WebSocketSearchTransport が受け持つ）
 //   SearchResultView : 結果の点群を表示（つかめる版は GrabbableSearchResultView）
 //   FrameCopyController : 手の枠で指した物体を CaptureAt で撮影する（2-SpatialSearchLiteFrame(Experimental) シーンのみ）
 //

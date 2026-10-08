@@ -4330,6 +4330,7 @@ GameObject:
   - component: {fileID: 2079540195}
   - component: {fileID: 2079540197}
   - component: {fileID: 2079540196}
+  - component: {fileID: 2079540198}
   m_Layer: 0
   m_Name: WebSocket
   m_TagString: Untagged
@@ -4364,7 +4365,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c6f2eb5921f945b8b1bff990e0e579f4, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::SearchClient
-  _serverPort: 8765
+  _transport: {fileID: 2079540198}
 --- !u!114 &2079540197
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -4377,6 +4378,19 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4cf600c34fd42d94096daadb666c230a, type: 3}
   m_Name: 
   m_EditorClassIdentifier: WebSocketSharpUtl::WebSocketSharpUtl.WebSocketClientManager
+--- !u!114 &2079540198
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2079540194}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8797ade035be4165a4a1f63b10bd5197, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::WebSocketSearchTransport
+  _serverPort: 8765
 --- !u!1 &2089093411
 GameObject:
   m_ObjectHideFlags: 0

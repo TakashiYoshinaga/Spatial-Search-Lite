@@ -156,7 +156,7 @@ python server/server.py --host 0.0.0.0
 |---|---|---|
 | `[MainCoordinator]` の Main Coordinator | Default Server Ip | 一度もIPを入力していないときにダイアログへ入れておく値 |
 | `Logic/Search` の Search Capture | Min / Max Depth Meters | この距離の範囲にある点だけを使います |
-| `Logic/WebSocket` の Search Client | Server Port | Pythonサーバーのポート |
+| `Logic/WebSocket` の Web Socket Search Transport | Server Port | Pythonサーバーのポート |
 | `SearchWindow` / `ServerDialog` の Head Follow | Distance / Height Offset / Follow Speed | ウィンドウを出す距離・高さ、頭に追いつく速さ |
 | `Logic/SearchResultView`（0-SpatialSearchLite） | Color / Point Size | 結果の点の色（既定は黄色）と大きさ |
 | `Logic/SearchResultView`（1-SpatialSearchLiteGrab） | Outlier Ratio / Min Collider Size | つかめる範囲の箱を決めるときに外す端の点の割合と、箱の最小の大きさ |
@@ -189,8 +189,8 @@ Unity側のスクリプトは2か所に分かれています。
 
 | 場所 | 中身 |
 |---|---|
-| `Packages/SpatialSearch/`（パッケージ `com.yoshinaga.spatialsearch`、名前空間 `SpatialSearch`） | 他のプロジェクトでも使える部分: `SpatialSearchDataSource`、撮影データと検索結果の型（`SearchData`）、`SearchClient`、結果の表示（`SearchResultView` / `GrabbableSearchResultView` / `SearchResultMeshBuilder`）、シェーダーとマテリアル |
-| `UnityMetaQuest/Assets/Scripts/SpatialSearchLite/` | このプロジェクト（Meta Quest）固有の部分: `MainCoordinator`、`SearchCapture`、`FrameCopyController`、`HeadFollow` |
+| `Packages/SpatialSearch/`（パッケージ `com.yoshinaga.spatialsearch`、名前空間 `SpatialSearch`） | 他のプロジェクトでも使える部分: `SpatialSearchDataSource`、撮影データと検索結果の型（`SearchData`）、`SearchClient`、通信路の共通の入り口（`SearchTransportBase`）、結果の表示（`SearchResultView` / `GrabbableSearchResultView` / `SearchResultMeshBuilder`）、シェーダーとマテリアル |
+| `UnityMetaQuest/Assets/Scripts/SpatialSearchLite/` | このプロジェクト（Meta Quest）固有の部分: `MainCoordinator`、`SearchCapture`、`WebSocketSearchTransport`、`FrameCopyController`、`HeadFollow` |
 
 パッケージは `WebSocketSharpUtl` と同じく、`UnityMetaQuest/Packages/manifest.json` から `file:../../Packages/SpatialSearch` で読み込んでいます。使い方は [Packages/SpatialSearch/README.md](Packages/SpatialSearch/README.md) にあります。
 
@@ -200,7 +200,8 @@ Unity側のスクリプトは2か所に分かれています。
 |---|---|
 | `MainCoordinator` | 3つのクラスをつなぎ、UIの操作（IPダイアログ、検索ウィンドウの開閉、検索の開始）と、コントローラのパネルの状態表示（検索中・見つかった数・エラー）を受け持ちます |
 | `SearchCapture` | `Capture(検索語)` が呼ばれたらカメラ画像と深度を撮影します。深度の各点が画像のどこに写るか（UV）と、その点での面の向き（法線）も求めて `SetCapture` します。`CaptureAt(位置)` で撮影すると、その位置が画像のどこに写るかも撮影データに入れます（点で探す）。手の枠のために、深度へ向けたレイキャストもします |
-| `SearchClient` | 撮影データを受け取ったら、画像と検索語（点で探すときは画像上の点）をサーバーへ送ります。返ってきたマスクを `SetResult` します |
+| `SearchClient` | 撮影データを受け取ったら、画像と検索語（点で探すときは画像上の点）をJSONにして、通信路でサーバーへ送ります。返ってきたマスクを `SetResult` します。通信そのものは次の通信路に任せていて、`SearchClient` はWebSocketを知りません |
+| `WebSocketSearchTransport` | `SearchClient` の通信路（`SearchTransportBase`）をWebSocketで実装したものです。`WebSocketSharpUtl` の `WebSocketClientManager` を包み、`ws://IP:ポート/` への接続と、文字列の送受信、接続の状態の通知を受け持ちます。HTTPなど別の方法にしたいときは、`SearchTransportBase` を継承したクラスに差し替えます |
 | `FrameCopyController` | 両手の枠の形を判定し、頭から枠の中心へのレイが深度に当たった位置に点を出します。点がロックされたら、手が下りるのを待って `SearchCapture.CaptureAt` で撮影します（2-SpatialSearchLiteFrame(Experimental) シーン） |
 | `SearchResultView` | マスクの白い部分に写っていた点だけを集めて、まとめて単色で表示します（0-SpatialSearchLite シーン） |
 | `GrabbableSearchResultView` | 見つかった物体ごとにひな形のプレハブ `GrabbableSearchResult` を複製し、物体の点を、撮影したカメラ画像を貼った四角形で表示します。つかめる範囲の箱も物体に合わせます（1-SpatialSearchLiteGrab シーン。2-SpatialSearchLiteFrame(Experimental) シーンではひな形が `GrabbableCopy`） |

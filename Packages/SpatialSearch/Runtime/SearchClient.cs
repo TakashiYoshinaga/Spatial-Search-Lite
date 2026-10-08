@@ -1,47 +1,53 @@
 using System;
 using R3;
 using UnityEngine;
-using WebSocketSharpUtl;
 
 namespace SpatialSearch
 {
     // サーバーとやり取りするクラス。
-    // 撮影データが流れてきたら画像と検索語をWebSocketで送り、返ってきたマスクを DataSource へ流す。
-    [RequireComponent(typeof(WebSocketClientManager))]
+    // 撮影データが流れてきたら画像と検索語（点で探すときは画像上の点）をJSONにして通信路で送り、返ってきたマスクを DataSource へ流す。
+    // 通信そのもの（WebSocketなど）は、SearchTransportBase を継承したクラスが受け持つ。
     public class SearchClient : MonoBehaviour
     {
-        [SerializeField] int _serverPort = 8765;
+        [Tooltip("サーバーとの通信路。空なら同じ GameObject から探す")]
+        [SerializeField] SearchTransportBase _transport;
 
         SpatialSearchDataSource _dataSource;
-        WebSocketClientManager _webSocket;
 
         // 結果待ちの撮影データ。null でなければ送信中なので、次の撮影は無視する。
         CaptureData _pending;
 
+        // 送信の失敗は別スレッドから知らされることがあるので、メインスレッドへ戻すために一度ここを通す。
+        readonly Subject<string> _sendFailedSubject = new Subject<string>();
+
         public void Initialize(SpatialSearchDataSource dataSource)
         {
             _dataSource = dataSource;
-            if (!TryGetComponent(out _webSocket)) _webSocket = gameObject.AddComponent<WebSocketClientManager>();
+            if (_transport == null && !TryGetComponent(out _transport))
+            {
+                Debug.LogError("[SearchClient] 通信路がありません。同じ GameObject に SearchTransportBase を継承したコンポーネントを付けるか、Inspector の Transport に設定してください", this);
+                return;
+            }
 
-            // WebSocketのイベントは別スレッドから来るので、メインスレッドへ戻してから扱う。
-            Observable.FromEvent<string>(h => _webSocket.OnMessageReceived += h, h => _webSocket.OnMessageReceived -= h)
+            // 通信路のイベントは別スレッドから来ることがあるので、メインスレッドへ戻してから扱う。
+            _transport.MessageObservable
                 .ObserveOnMainThread()
                 .Subscribe(OnMessage)
                 .AddTo(this);
 
-            Observable.FromEvent(h => _webSocket.OnConnected += h, h => _webSocket.OnConnected -= h)
+            // 接続に失敗したときも false が来る。
+            _transport.ConnectedObservable
                 .ObserveOnMainThread()
-                .Subscribe(_ => _dataSource.SetConnected(true))
+                .Subscribe(connected =>
+                {
+                    _dataSource.SetConnected(connected);
+                    if (!connected) Fail("Disconnected from the server");
+                })
                 .AddTo(this);
 
-            // 接続に失敗したときも OnDisconnected が来る。
-            Observable.FromEvent<string>(h => _webSocket.OnDisconnected += h, h => _webSocket.OnDisconnected -= h)
+            _sendFailedSubject
                 .ObserveOnMainThread()
-                .Subscribe(_ =>
-                {
-                    _dataSource.SetConnected(false);
-                    Fail("Disconnected from the server");
-                })
+                .Subscribe(Fail)
                 .AddTo(this);
 
             _dataSource.CaptureObservable
@@ -52,10 +58,8 @@ namespace SpatialSearch
         // 指定したIPのサーバーへ接続する。接続中なら切断してから繋ぎ直す。
         public void Connect(string serverIp)
         {
-            var url = $"ws://{serverIp}:{_serverPort}/";
-            Debug.Log($"[SearchClient] connecting to {url}");
-            _webSocket.Disconnect();
-            _webSocket.Connect(url);
+            if (_transport == null) return; // 通信路が無いことは Initialize で知らせてある
+            _transport.Connect(serverIp);
         }
 
         void Send(CaptureData capture)
@@ -66,17 +70,17 @@ namespace SpatialSearch
                 Destroy(capture.Image); // 結果にならない撮影の画像は、誰も使わないのでここで捨てる
                 return;
             }
-            if (!_webSocket.IsConnected)
+            if (!_transport.IsConnected)
             {
                 _dataSource.SetResult(new SearchResult { Capture = capture, Error = "Not connected to the server" });
-                _webSocket.ReConnect();
+                _transport.Reconnect();
                 return;
             }
 
             _pending = capture;
-            _webSocket.SendWebSocketMessage(RequestJson(capture), completed =>
+            _transport.Send(RequestJson(capture), completed =>
             {
-                if (!completed) Debug.LogWarning("[SearchClient] 送信に失敗しました");
+                if (!completed) _sendFailedSubject.OnNext("Failed to send the request");
             });
         }
 

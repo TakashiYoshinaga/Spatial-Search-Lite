@@ -2,8 +2,7 @@
     "name": "SpatialSearch",
     "rootNamespace": "SpatialSearch",
     "references": [
-        "R3.Unity",
-        "WebSocketSharpUtl"
+        "R3.Unity"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

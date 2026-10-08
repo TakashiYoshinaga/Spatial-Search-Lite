@@ -4,7 +4,7 @@
     "author": { "name": "yoshinaga" },
     "version": "1.0.0",
     "unity": "6000.0",
-    "description": "Find real objects in a captured camera image with SAM 3.1 through a WebSocket server, and show them as point clouds or grabbable textured copies. Has no UI of its own. Requires R3, URP and WebSocketSharpUtl.",
+    "description": "Find real objects in a captured camera image with SAM 3.1 through a server, and show them as point clouds or grabbable textured copies. Has no UI and no network code of its own: the project supplies the connection by subclassing SearchTransportBase. Requires R3 and URP.",
     "keywords": [ "spatial search", "SAM", "point cloud", "mixed reality" ],
     "license": "MIT",
     "category": "",
