@@ -16,16 +16,22 @@
 
 | パッケージ | 入れ方 |
 |---|---|
-| R3（`com.cysharp.r3` と `org.nuget.r3`） | OpenUPM と UnityNuGet の scoped registry から入れます。このパッケージの `package.json` には書けないので、使う側の `manifest.json` に追加してください |
+| R3（`com.cysharp.r3` と `org.nuget.r3`） | 使う側の `manifest.json` に OpenUPM と UnityNuGet の scoped registry を設定し、両パッケージを追加します |
 | URP（`com.unity.render-pipelines.universal`） | シェーダーが URP 用です |
+
+このパッケージの `package.json` では `dependencies` が空なので、R3 と URP は自動では入りません。使う側のプロジェクトで追加してください。レジストリの設定とバージョンの例は、[このリポジトリの manifest.json](../../UnityMetaQuest/Packages/manifest.json) にあります。
 
 通信のライブラリには依存しません。通信路（`SearchTransportBase` を継承したクラス）が使うパッケージは、使う側で入れてください。
 
-`manifest.json` の例（パスは `manifest.json` から見た相対パス。2行目は、このリポジトリの WebSocket 版の通信路が使うパッケージです）:
+`manifest.json` の `dependencies` に追加する項目の例です。パスは `manifest.json` から見た相対パスなので、別のプロジェクトでは配置に合わせて変更してください。WebSocketSharpUtl は、このリポジトリの WebSocket 版の通信路を使う場合に必要です。既存の依存パッケージは残してください。
 
 ```json
-"com.yoshinaga.spatialsearch": "file:../../Packages/SpatialSearch",
-"com.yoshinaga.websocketsharputl": "file:../../Packages/WebSocketSharpUtl",
+{
+  "dependencies": {
+    "com.yoshinaga.spatialsearch": "file:../../Packages/SpatialSearch",
+    "com.yoshinaga.websocketsharputl": "file:../../Packages/WebSocketSharpUtl"
+  }
+}
 ```
 
 ## 中身
@@ -48,12 +54,15 @@
 
 1. 撮影するクラスを用意し、`CaptureData` を作って `SpatialSearchDataSource.SetCapture` に流します（下の「撮影データの約束」）
 2. 通信路を用意します。`SearchTransportBase` を継承したクラスを作ります（下の「通信路の実装」）
-3. `SearchClient`、通信路、結果を表示するクラス（`SearchResultView` か `GrabbableSearchResultView`）をシーンに置きます。`SearchClient` と通信路は同じ GameObject に付けます
+3. `SearchClient`、通信路、結果を表示するクラス（`SearchResultView` か `GrabbableSearchResultView` のどちらか1つ）をシーンに置きます。`SearchClient` と通信路は同じ GameObject に付けます。別の GameObject に置く場合は、`SearchClient` の Inspector の Transport に通信路を設定します
 4. 起動時に、同じ `SpatialSearchDataSource` を各クラスの `Initialize` に渡します（通信路には渡しません。`SearchClient` が通信路を使います）
 5. 状態を表示したいときは、`CaptureObservable`（検索を始めた）と `ShownObservable`（結果を表示し終えた）を購読します。**`SearchClient.Initialize` より先に購読してください**。未接続のとき `SearchClient` は撮影を受け取ったその場でエラー結果を流すので、後から購読すると「検索中」の表示がエラーの表示を上書きしてしまいます
 6. `SearchClient.Connect(サーバーのIP)` で接続します（ポートなど接続先の細かい設定は、通信路の実装が決めます。このリポジトリの WebSocket 版は Inspector の Server Port で、既定は 8765）
 
+次は `MonoBehaviour` の `Awake` などで行う初期化の抜粋です。`capture`、`resultView`、`client`、`status` は、使う側で用意した撮影クラス、表示クラス、`SearchClient`、状態表示用のテキストへの参照です。
+
 ```csharp
+using R3;
 using SpatialSearch;
 
 var dataSource = new SpatialSearchDataSource();
@@ -69,6 +78,10 @@ resultView.ShownObservable.Subscribe(shown => status.text = shown.Result.IsSucce
 client.Initialize(dataSource);     // SearchClient
 client.Connect("192.168.0.10");
 ```
+
+`ShownResult.ObjectCount` は、`SearchResultView` では検出された物体数（点を1つも表示できなければ0）、`GrabbableSearchResultView` では実際に生成した物体数です。マスクの位置に深度の点がない物体は、Grab版では生成されません。
+
+撮影データは Unity のメインスレッドから `SetCapture` に流してください。前の検索の結果待ちの間に流した撮影は、`SearchClient` が無視し、その撮影の画像を破棄します。
 
 ### 結果の表示の設定
 
@@ -97,8 +110,8 @@ Meta Quest 用の WebSocket 版の例は `UnityMetaQuest/Assets/Scripts/SpatialS
 | 項目 | 内容 |
 |---|---|
 | `Query` | 検索語。点で探すときは表示用の名前 |
-| `HasPoint` / `PointUv` | `HasPoint` が true なら、検索語ではなく `PointUv`（カメラ画像のUV）に写っている物体1つを探します |
-| `Image` | 撮影したカメラ画像。撮影ごとに新しく作ります（結果の表示に貼り続けるので、使い回して上書きしない）。表示し終えたクラスが `Destroy` します |
+| `HasPoint` / `PointUv` | `HasPoint` が true なら、検索語ではなく `PointUv`（0〜1、左下原点のカメラ画像のUV）に写っている物体1つを探します |
+| `Image` | 撮影したカメラ画像。PNGへ変換するため、CPUから読み出せる `Texture2D` を撮影ごとに新しく作ります。結果の表示に使い続けるので、使い回して上書きしないでください |
 | `Points[i]` | 深度の各点のワールド座標 |
 | `ImageUvs[i]` | `Points[i]` がカメラ画像のどこに写るか（0〜1、**左下が原点**）。マスクをこのUVで引いて、点が物体上にあるかを決めます |
 | `Depths[i]` | 点の深度（m） |
@@ -106,7 +119,11 @@ Meta Quest 用の WebSocket 版の例は `UnityMetaQuest/Assets/Scripts/SpatialS
 | `PixelRightPerMeter` / `PixelUpPerMeter` | 深度1画素ぶんの右・上への幅を、1m先で測ったワールドのベクトル（深度に比例する） |
 | `Projection` | 撮影した瞬間のカメラで、ワールド座標をカメラ画像のUVへ投影する `ImageProjection` |
 
-`HasPoint` / `PointUv` を使うのは `SearchClient` だけです。結果の表示では、`SearchResultView` は `Query`（状態の表示）、`Points`、`ImageUvs` を使い、`Image` は表示し終えたら `Destroy` します。`GrabbableSearchResultView` は、それ以外の項目もすべて使います。
+`Points` と `ImageUvs` は、同じ点を同じ添字で表す、同じ長さの配列にしてください。画像の外へ投影される点は除外し、`ImageUvs` の各成分を0〜1の範囲にします。`GrabbableSearchResultView` を使う場合は、`Depths` と `Normals` も同じ長さで用意し、`PixelRightPerMeter`、`PixelUpPerMeter`、`Projection` を設定します。法線が求められなくても `Normals` の配列は必要で、その点の値を `Vector3.zero` にします。
+
+`HasPoint` / `PointUv` を使うのは `SearchClient` だけです。表示には、`SearchResultView` は `Query`（ログ用）、`Points`、`ImageUvs` を使い、`GrabbableSearchResultView` は、それ以外の項目もすべて使います。UIに検索語を出す場合は、`ShownResult.Result.Capture.Query` を参照します。
+
+両方の表示クラスは、新しい結果を受け取ったときに前の結果の `Image` と各 `Detection.Mask` を `Destroy` します。表示クラス自体が破棄されたときも同様です。表示直後に画像を破棄するわけではありません。同じ結果を複数の表示クラスで共有すると破棄が重複するので、この実装では表示クラスを1つにしてください。
 
 ## サーバーとの通信
 
@@ -118,4 +135,6 @@ Meta Quest 用の WebSocket 版の例は `UnityMetaQuest/Assets/Scripts/SpatialS
 | Unity → サーバー（点） | `{"type": "point", "x": 640, "y": 480, "image": "<PNGのbase64>"}`。x, y は画像のピクセルで **左上が原点**（`SearchClient` が `PointUv` の上下を反転して送ります） |
 | サーバー → Unity | `{"type": "result", "query": "...", "detections": [{"score": 0.93, "mask": "<PNGのbase64>"}, ...]}` または `{"type": "error", "message": "..."}` |
 
-マスクは送った画像と同じ大きさで、白い部分が物体です。点で探したときは `detections` が1件になります。
+検索語は空白だけの文字列にせず、`,` と `:` を含めないでください。このリポジトリのサーバーではエラーになります。点で探した場合、サーバーが返す `query` は空文字列ですが、Unity側の `SearchResult.Capture.Query` には撮影時の表示用の名前が残ります。
+
+マスクは送った画像と同じ大きさで、白い部分が物体です。点で探して成功したときは `detections` が1件になります。
