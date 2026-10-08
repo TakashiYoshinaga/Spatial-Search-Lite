@@ -1,50 +1,52 @@
-# つかむ・指の枠でコピーする
+# Grab and copy with a finger frame
 
-[体験手順に戻る](../README.md) · [設定・しくみ](development.md)
+English | [日本語](interactions_JP.md)
 
-ComfyUI と Pythonサーバーを起動し、Questアプリから接続してから操作してください。シーンの選び方とビルド手順は [README の「Questアプリをビルドして入れる」](../README.md#3-questアプリをビルドして入れる) にあります。
+[Back to the main guide](../README.md) · [Settings and how it works](development.md)
 
-- **見つけた物をつかむ：** `1-SpatialSearchLiteGrab` または `2-SpatialSearchLiteFrame(Experimental)`
-- **指の枠で物体をコピーする：** `2-SpatialSearchLiteFrame(Experimental)`（実験機能）
+Start ComfyUI and the Python server, and connect from the Quest app, before you begin. How to choose a scene and build it is in [README's "Build the Quest app and install it"](../README.md#3-build-the-quest-app-and-install-it).
 
-## 見つけた物をつかむ
+- **Grab found objects:** `1-SpatialSearchLiteGrab` or `2-SpatialSearchLiteFrame(Experimental)`
+- **Copy an object with a finger frame:** `2-SpatialSearchLiteFrame(Experimental)` (experimental feature)
 
-`1-SpatialSearchLiteGrab` シーンでは、見つかった物体ごとに別々の面になり、コントローラでつかんで動かせます。面には、撮影した瞬間のカメラ画像が貼ってあります。
+## Grab found objects
 
-1. コントローラを物体に近づけます。つかめる距離に入ると、物体が白っぽくなります
-2. **トリガーボタン**（人差し指で引くボタン）を引くとつかめます。つかんでいる間は物体が黄色がかります
-3. 引いたまま動かすと物体が付いてきます。離すとその場に残ります
+In the `1-SpatialSearchLiteGrab` scene, each found object becomes its own surface that you can grab and move with the controllers. The surface is textured with the camera image from the moment of capture.
 
-両手のコントローラで同じ物体をつかむと、大きさも変えられます。このシーンでは手（ハンドトラッキング）ではつかめません（`2-SpatialSearchLiteFrame(Experimental)` シーンでは手でもつかめます）。
+1. Bring a controller close to the object. When it is within grabbing distance, the object turns whitish
+2. Pull the **trigger button** (the button you pull with your index finger) to grab it. While held, the object takes on a yellowish tint
+3. Move your hand while holding the trigger and the object follows. Release and it stays where it is
 
-## 指の枠で物体をコピーする
+If you grab the same object with both controllers, you can also resize it. In this scene you cannot grab with your hands (hand tracking); in the `2-SpatialSearchLiteFrame(Experimental)` scene you can also grab with your hands.
 
-`2-SpatialSearchLiteFrame(Experimental)` シーンでは、両手で写真を撮るときの枠を作って物体を指すと、その物体1つだけを切り出し、撮影した位置に複製します。検索語は要りません。複製は手でもコントローラでもつかんで動かせます。
+## Copy an object with a finger frame
 
-サーバーへの接続まではコントローラで操作し、そのあとコントローラを置きます。
+In the `2-SpatialSearchLiteFrame(Experimental)` scene, make the frame you would use to take a photo with both hands and point at an object, and only that one object is cut out and duplicated at the position where it was captured. No search term is needed. You can grab and move the copy with either your hands or the controllers.
 
-1. 顔の前（腕を軽く伸ばしたあたり）で、両手の親指と人差し指でL字を作ります。他の指は軽く握ります
-   - 左手は枠の **左上** の角: 人差し指を右へ、親指を下へ向けます
-   - 右手は枠の **右下** の角: 人差し指を左へ、親指を上へ向けます
-2. 枠として認識されると白い四角が出て、枠の中心の先にある物の表面に点が出ます。点を物体の真ん中に合わせます
-3. そのまま約2秒止めると、点の周りのリングが一周して緑になり、`Lower your hands` と出ます（ロック）
-4. 両手を下ろして、カメラに写らないようにします。手が見えなくなると撮影され、`Copying...` と出ます
-5. 数秒後、指した物体の複製がその場所に現れます。手でつまむか握ってつかみ、好きな場所へ動かせます
+Use the controllers until you are connected to the server, then put them down.
 
-- 点が **橙色** のときは、物体の縁や穴を指しています。ロックしないので、物体の真ん中へ点を動かしてください
-- ロックしてから3秒以内に手を下ろさないと取り消されます（`Canceled`）。ロックした点が視界から外れたときも取り消されます（`Lost the target`）
-- 手を下ろす間に頭が動いても大丈夫です。ロックした点を実世界の位置として覚えていて、撮影した画像の上でその位置を指します
-- 物体の一部（顔だけ、取っ手だけなど）が切り出されることがあります。物体の真ん中を指すと、全体が取れやすくなります
-- このシーンでも、左コントローラの **Search** から検索語で探せます。新しく複製するか検索すると、前の結果は消えます
+1. In front of your face (about with your arms slightly extended), make an L shape with the thumb and index finger of both hands. Curl the other fingers loosely
+   - The left hand is the **top-left** corner of the frame: point the index finger to the right and the thumb down
+   - The right hand is the **bottom-right** corner of the frame: point the index finger to the left and the thumb up
+2. When it is recognized as a frame, a white rectangle appears, and a dot appears on the surface of whatever is beyond the center of the frame. Aim the dot at the middle of the object
+3. Hold still for about 2 seconds. The ring around the dot completes a full circle and turns green, and `Lower your hands` is shown (lock)
+4. Lower both hands so the camera cannot see them. When the hands are no longer visible, the capture is taken and `Copying...` is shown
+5. After a few seconds, a copy of the object you pointed at appears at that location. Pinch or grab it with your hand and move it wherever you like
 
-## うまくいかないとき
+- When the dot is **orange**, you are pointing at the edge of the object or a hole. It will not lock, so move the dot to the middle of the object
+- If you do not lower your hands within 3 seconds after the lock, it is canceled (`Canceled`). It is also canceled if the locked point leaves your field of view (`Lost the target`)
+- It is fine if your head moves while you lower your hands. The locked point is remembered as a position in the real world, and that position is pointed at on the captured image
+- Only a part of the object (just a face, just a handle, and so on) may be cut out. Pointing at the middle of the object makes it easier to get the whole thing
+- In this scene too, you can search by word from **Search** on the left controller. Making a new copy or searching clears the previous result
 
-| 症状 | 確認すること |
+## Troubleshooting
+
+| Symptom | What to check |
 |---|---|
-| 物体が透けて見える・見えなくなる | 物体の正面（表面の向き）から離れて横や裏から見るほど透明にしています。表面を自分の方へ向け直すか、マテリアルの Fade Start / Fade End を調整してください |
-| 点群をつかめない | `1-SpatialSearchLiteGrab` / `2-SpatialSearchLiteFrame(Experimental)` シーンか確認し、コントローラを点群の中まで入れてからトリガーボタンを引いてください。手でつかめるのは `2-SpatialSearchLiteFrame(Experimental)` シーンだけです |
-| 指で枠を作っても白い四角が出ない | コントローラを置いて、手が認識されているか確認してください（Questの設定でハンドトラッキングをオフにしている場合は、オンに戻します）。左手が左上・右手が右下で、人差し指が横、親指が縦（左手は下、右手は上）になっているかも確かめてください |
-| 枠は出るが点が出ない | 枠の先にある物までの距離が、Search Capture の Min / Max Depth Meters（既定は 0.1〜5m）の範囲にあるか確認してください |
-| `Copying...` のまま進まない | 検索語での検索の結果待ちと重なると、撮影が無視されます。30秒で元に戻るので、やり直してください |
+| The object looks see-through or disappears | The object becomes more transparent the further you are from its front (surface direction), seen from the side or behind. Turn the surface back toward you, or adjust the material's Fade Start / Fade End |
+| You cannot grab the point cloud | Check that you are in the `1-SpatialSearchLiteGrab` / `2-SpatialSearchLiteFrame(Experimental)` scene, and pull the trigger button with the controller inside the point cloud. Hands can grab only in the `2-SpatialSearchLiteFrame(Experimental)` scene |
+| The white rectangle does not appear when you make the frame with your fingers | Put the controllers down and check that your hands are recognized (if hand tracking is turned off in the Quest's settings, turn it back on). Also check that the left hand is top-left and the right hand is bottom-right, with the index finger horizontal and the thumb vertical (down for the left hand, up for the right hand) |
+| The frame appears but the dot does not | Check that the distance to the object beyond the frame is within the range of Search Capture's Min / Max Depth Meters (default 0.1–5 m) |
+| It stays at `Copying...` | If the capture overlaps with waiting for the result of a word search, it is ignored. It returns to normal after 30 seconds, so try again |
 
-表示や操作の細かい値を変えるときは、[設定できる項目](development.md#設定できる項目)を参照してください。
+To change fine values for the display and operation, see [Configurable settings](development.md#configurable-settings).

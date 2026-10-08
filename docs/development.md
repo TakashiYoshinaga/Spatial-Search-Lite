@@ -1,79 +1,81 @@
-# 設定・しくみ（開発者向け）
+# Settings and how it works (for developers)
 
-[体験手順に戻る](../README.md) · [つかむ・指の枠でコピーする](interactions.md)
+English | [日本語](development_JP.md)
 
-体験に必要な準備と起動手順は README にあります。このページは、設定を調整したり、実装を読んだりするための補足です。
+[Back to the main guide](../README.md) · [Grab and copy with a finger frame](interactions.md)
 
-R3 などの導入操作は、[R3 and UniTask Installation Guide（英語・画像付き）](ExternalTools/R3_UniTask_Installation.md) を参照してください。
+The preparation and startup steps needed to try the app are in the README. This page is a supplement for adjusting settings and reading the implementation.
 
-## サーバーのオプション
+For the steps to install R3 and the like, see the [R3 and UniTask Installation Guide (with images)](ExternalTools/R3_UniTask_Installation.md).
 
-`python server/server.py` に次のオプションを付けられます。コマンドはリポジトリのルートで実行してください。
+## Server options
 
-| オプション | 既定値 | 内容 |
+You can add the following options to `python server/server.py`. Run the command at the repository root.
+
+| Option | Default | Description |
 |---|---|---|
-| `--host` | `127.0.0.1` | 待ち受けるアドレス。Questから繋ぐときは `0.0.0.0` |
-| `--port` | `8765` | 待ち受けるポート |
-| `--comfyui` | `http://127.0.0.1:8188` | ComfyUIのURL |
-| `--checkpoint` | `sam3.1_multiplex_fp16.safetensors` | SAM 3.1 のチェックポイント名 |
-| `--threshold` | `0.5` | これより自信の低い検出は捨てます。見つからないときは下げてみてください |
-| `--max-detections` | `8` | 1回の検索で見つける物体の最大数 |
+| `--host` | `127.0.0.1` | Address to listen on. Use `0.0.0.0` when connecting from the Quest |
+| `--port` | `8765` | Port to listen on |
+| `--comfyui` | `http://127.0.0.1:8188` | URL of ComfyUI |
+| `--checkpoint` | `sam3.1_multiplex_fp16.safetensors` | Name of the SAM 3.1 checkpoint |
+| `--threshold` | `0.5` | Detections less confident than this are discarded. Lower it if nothing is found |
+| `--max-detections` | `8` | Maximum number of objects found in one search |
 
-## 設定できる項目
+## Configurable settings
 
-| 場所（Hierarchy） | 項目 | 内容 |
+| Where (Hierarchy) | Item | Description |
 |---|---|---|
-| `[MainCoordinator]` の Main Coordinator | Default Server Ip | 一度もIPを入力していないときにダイアログへ入れておく値 |
-| `Logic/Search` の Search Capture | Min / Max Depth Meters | この距離の範囲にある点だけを使います |
-| `Logic/WebSocket` の Web Socket Search Transport | Server Port | Pythonサーバーのポート |
-| `SearchWindow` / `ServerDialog` の Head Follow | Distance / Height Offset / Follow Speed | ウィンドウを出す距離・高さ、頭に追いつく速さ |
-| `Logic/SearchResultView`（0-SpatialSearchLite） | Color / Point Size | 結果の点の色（既定は黄色）と大きさ |
-| `Logic/SearchResultView`（1-SpatialSearchLiteGrab） | Outlier Ratio / Min Collider Size | つかめる範囲の箱を決めるときに外す端の点の割合と、箱の最小の大きさ |
-| `Packages/SpatialSearch/Materials/SpatialSearchColoredPointsMat`（Project ウィンドウでは Packages > SpatialSearch） | Depth Tolerance | 重なった板を同じ面として描く奥行きの幅（板の大きさの何倍か）。ちらつくときは上げ、後ろの板が透けて見えるときは下げます |
-| 〃 | Fade Start / Fade End | 物体の正面（点群から求めた面の向き）と今の視点の向きの内積（1=正面から、0=真横、負=裏側）。Fade Start 以上で不透明、Fade End 以下で完全に透明、その間はなめらかに変えます。もっと横から見ても見えるようにするときは Fade End を下げます |
-| `Assets/Prefabs/GrabbableSearchResult` の Interactable Color Visual | Hover / Select Color State | 近づけた・つかんだときに重ねる色（Aが重ねる強さ） |
-| `Logic/FrameCopy` の Frame Copy Controller（2-SpatialSearchLiteFrame(Experimental)） | Stable Angle / Lock Seconds | 点がこの角度（度）以内に止まっている時間がこの秒数になると、ロックします |
-| 〃 | Hands Gone Seconds / Lower Hands Timeout | 両手がカメラ画像から消えてから撮影するまでの時間と、ロックしてから手を下ろすのを待つ時間（秒） |
-| 〃 | Result Timeout | サーバーの結果を待つ時間（秒）。過ぎると次の操作を受け付けます |
-| 〃 | Dot Angle / Ring Angle / Aim / Edge / Locked Color | 点とリングの見た目の大きさ（度）と、狙っているとき・縁を指しているとき・ロックしたときの色 |
+| Main Coordinator on `[MainCoordinator]` | Default Server Ip | Value pre-filled in the dialog when no IP has ever been entered |
+| Search Capture on `Logic/Search` | Min / Max Depth Meters | Only points within this distance range are used |
+| Web Socket Search Transport on `Logic/WebSocket` | Server Port | Port of the Python server |
+| Head Follow on `SearchWindow` / `ServerDialog` | Distance / Height Offset / Follow Speed | How far and how high the window appears, and how fast it catches up with your head |
+| `Logic/SearchResultView` (0-SpatialSearchLite) | Color / Point Size | Color (yellow by default) and size of the result points |
+| `Logic/SearchResultView` (1-SpatialSearchLiteGrab) | Outlier Ratio / Min Collider Size | Ratio of edge points excluded when determining the grabbable box, and the box's minimum size |
+| `Packages/SpatialSearch/Materials/SpatialSearchColoredPointsMat` (in the Project window: Packages > SpatialSearch) | Depth Tolerance | Depth range within which overlapping quads are drawn as the same surface (as a multiple of the quad size). Raise it if flickering occurs; lower it if rear quads show through |
+| Same material | Fade Start / Fade End | Dot product of the object's front (the surface direction obtained from the point cloud) and the current view direction (1 = from the front, 0 = edge-on, negative = from behind). Fully opaque at or above Fade Start, fully transparent at or below Fade End, and smoothly blended in between. Lower Fade End to keep the object visible from more oblique angles |
+| Interactable Color Visual on `Assets/Prefabs/GrabbableSearchResult` | Hover / Select Color State | Color overlaid when approached or grabbed (A is the overlay strength) |
+| Frame Copy Controller on `Logic/FrameCopy` (2-SpatialSearchLiteFrame(Experimental)) | Stable Angle / Lock Seconds | The point locks when it has stayed within this angle (degrees) for this many seconds |
+| Same component | Hands Gone Seconds / Lower Hands Timeout | Time from when both hands disappear from the camera image until the capture, and time to wait for the hands to be lowered after the lock (seconds) |
+| Same component | Result Timeout | Time to wait for the server's result (seconds). After it passes, the next operation is accepted |
+| Same component | Dot Angle / Ring Angle / Aim / Edge / Locked Color | Apparent size of the dot and ring (degrees), and the colors while aiming, while pointing at an edge, and when locked |
 
-## しくみ
+## How it works
 
 ```text
-Quest : カメラ画像 + 深度 を撮影 ──(WebSocket)──▶ PC : Pythonサーバー ──▶ ComfyUI (SAM 3.1)
-Quest : マスクに写っていた深度の点を表示 ◀──(WebSocket)── PC : 物体ごとのマスク画像
+Quest : capture camera image + depth ──(WebSocket)──▶ PC : Python server ──▶ ComfyUI (SAM 3.1)
+Quest : show the depth points covered by the mask ◀──(WebSocket)── PC : one mask image per object
 ```
 
-Unity側のスクリプトは2か所に分かれています。
+The Unity scripts are split across two places.
 
-| 場所 | 中身 |
+| Location | Contents |
 |---|---|
-| `Packages/SpatialSearch/`（パッケージ `com.yoshinaga.spatialsearch`、名前空間 `SpatialSearch`） | 他のプロジェクトでも使える部分: `SpatialSearchDataSource`、撮影データと検索結果の型（`SearchData`）、`SearchClient`、通信路の共通の入り口（`SearchTransportBase`）、結果の表示（`SearchResultView` / `GrabbableSearchResultView` / `SearchResultMeshBuilder`）、シェーダーとマテリアル |
-| `UnityMetaQuest/Assets/Scripts/SpatialSearchLite/` | このプロジェクト（Meta Quest）固有の部分: `MainCoordinator`、`SearchCapture`、`WebSocketSearchTransport`、`FrameCopyController`、`HeadFollow` |
+| `Packages/SpatialSearch/` (package `com.yoshinaga.spatialsearch`, namespace `SpatialSearch`) | The part reusable in other projects: `SpatialSearchDataSource`, the capture-data and search-result types (`SearchData`), `SearchClient`, the common entry point for transports (`SearchTransportBase`), result display (`SearchResultView` / `GrabbableSearchResultView` / `SearchResultMeshBuilder`), shaders and materials |
+| `UnityMetaQuest/Assets/Scripts/SpatialSearchLite/` | The part specific to this project (Meta Quest): `MainCoordinator`, `SearchCapture`, `WebSocketSearchTransport`, `FrameCopyController`, `HeadFollow` |
 
-パッケージは `WebSocketSharpUtl` と同じく、`UnityMetaQuest/Packages/manifest.json` から `file:../../Packages/SpatialSearch` で読み込んでいます。使い方は [Packages/SpatialSearch/README.md](../Packages/SpatialSearch/README.md) にあります。
+Like `WebSocketSharpUtl`, the package is loaded from `UnityMetaQuest/Packages/manifest.json` with `file:../../Packages/SpatialSearch`. How to use it is in [Packages/SpatialSearch/README.md](../Packages/SpatialSearch/README.md).
 
-`MainCoordinator` が3つのクラスに同じ `SpatialSearchDataSource` を渡し、各クラスはそこに流れてくるデータを受け取って動きます。ボタンや入力欄などUIの操作は `MainCoordinator` がまとめて受け持ち、3つのクラスはUIを知りません。`2-SpatialSearchLiteFrame(Experimental)` シーンでは、手の枠を扱う `FrameCopyController` も加わります。
+`MainCoordinator` hands the same `SpatialSearchDataSource` to three classes, and each class works by receiving the data that flows through it. UI operations such as buttons and input fields are all handled by `MainCoordinator`; the three classes know nothing about the UI. In the `2-SpatialSearchLiteFrame(Experimental)` scene, `FrameCopyController`, which handles the hand frame, joins them.
 
-| クラス | 役割 |
+| Class | Role |
 |---|---|
-| `MainCoordinator` | 3つのクラスをつなぎ、UIの操作（IPダイアログ、検索ウィンドウの開閉、検索の開始）と、コントローラのパネルの状態表示（検索中・見つかった数・エラー）を受け持ちます |
-| `SearchCapture` | `Capture(検索語)` が呼ばれたらカメラ画像と深度を撮影します。深度の各点が画像のどこに写るか（UV）と、その点での面の向き（法線）も求めて `SetCapture` します。`CaptureAt(位置)` で撮影すると、その位置が画像のどこに写るかも撮影データに入れます（点で探す）。手の枠のために、深度へ向けたレイキャストもします |
-| `SearchClient` | 撮影データを受け取ったら、画像と検索語（点で探すときは画像上の点）をJSONにして、通信路でサーバーへ送ります。返ってきたマスクを `SetResult` します。通信そのものは次の通信路に任せていて、`SearchClient` はWebSocketを知りません |
-| `WebSocketSearchTransport` | `SearchClient` の通信路（`SearchTransportBase`）をWebSocketで実装したものです。`WebSocketSharpUtl` の `WebSocketClientManager` を包み、`ws://IP:ポート/` への接続と、文字列の送受信、接続の状態の通知を受け持ちます。HTTPなど別の方法にしたいときは、`SearchTransportBase` を継承したクラスに差し替えます |
-| `FrameCopyController` | 両手の枠の形を判定し、頭から枠の中心へのレイが深度に当たった位置に点を出します。点がロックされたら、手が下りるのを待って `SearchCapture.CaptureAt` で撮影します（2-SpatialSearchLiteFrame(Experimental) シーン） |
-| `SearchResultView` | マスクの白い部分に写っていた点だけを集めて、まとめて単色で表示します（0-SpatialSearchLite シーン） |
-| `GrabbableSearchResultView` | 見つかった物体ごとにひな形のプレハブ `GrabbableSearchResult` を複製し、物体の点を、撮影したカメラ画像を貼った四角形で表示します。つかめる範囲の箱も物体に合わせます（1-SpatialSearchLiteGrab シーン。2-SpatialSearchLiteFrame(Experimental) シーンではひな形が `GrabbableCopy`） |
-| `SearchResultMeshBuilder` | `GrabbableSearchResultView` が使う部品です。点（深度の1画素）ごとに、その画素が写している範囲の四角形を作り、四隅をカメラ画像へ投影してUVにします |
+| `MainCoordinator` | Connects the three classes and handles UI operations (IP dialog, opening/closing the search window, starting a search) and the status display on the controller's panel (searching, number found, errors) |
+| `SearchCapture` | When `Capture(search term)` is called, captures the camera image and depth. It also computes where each depth point appears in the image (UV) and the surface direction (normal) at that point, and calls `SetCapture`. When capturing with `CaptureAt(position)`, it also puts where that position appears in the image into the capture data (search by point). It also does a raycast toward the depth for the hand frame |
+| `SearchClient` | On receiving the captured data, turns the image and the search term (or, for a search by point, the point on the image) into JSON and sends it to the server through the transport. It calls `SetResult` with the masks that come back. The communication itself is left to the transport below, and `SearchClient` knows nothing about WebSocket |
+| `WebSocketSearchTransport` | A WebSocket implementation of `SearchClient`'s transport (`SearchTransportBase`). It wraps `WebSocketSharpUtl`'s `WebSocketClientManager` and handles connecting to `ws://IP:port/`, sending and receiving strings, and notifying the connection state. To use something else such as HTTP, swap in a class that inherits `SearchTransportBase` |
+| `FrameCopyController` | Detects the shape of the two-handed frame and shows a dot where the ray from the head through the frame's center hits the depth. Once the dot locks, it waits for the hands to be lowered and then captures with `SearchCapture.CaptureAt` (2-SpatialSearchLiteFrame(Experimental) scene) |
+| `SearchResultView` | Collects only the points that fall on the white part of the mask and shows them together in a single color (0-SpatialSearchLite scene) |
+| `GrabbableSearchResultView` | Clones the template prefab `GrabbableSearchResult` for each found object and displays the object's points as quads textured with the captured camera image. It also fits the grabbable box to the object (1-SpatialSearchLiteGrab scene; in the 2-SpatialSearchLiteFrame(Experimental) scene the template is `GrabbableCopy`) |
+| `SearchResultMeshBuilder` | A helper used by `GrabbableSearchResultView`. For each point (one depth pixel), it builds a quad covering the area that pixel sees, and projects its four corners onto the camera image to get the UVs |
 
-画像は点ごとに1色を割り当てるのではなく、四角形の中でカメラ画像の画素そのものを引いて貼っています（シェーダーはパッケージの `SpatialSearchColoredPointsURP`）。そのため、近づいても粗いドットにはなりません。
+Instead of assigning one color per point, the camera image's own pixels are sampled and pasted inside each quad (the shader is the package's `SpatialSearchColoredPointsURP`). So the result does not turn into coarse dots even when you move close.
 
-四角形はシェーダーが毎フレーム視点の方へ向けるので（ビルボード）、物体を傾けても板は常にこちらを向きます。四隅と画像の対応は撮影したときのままなので、撮影した向きから見るとぴったり合い、大きく傾けると貼った画像が少しずれて見えます。
+The shader turns the quads toward the viewpoint every frame (billboarding), so the quads always face you even when you tilt the object. The correspondence between the four corners and the image stays as it was at capture time, so it fits perfectly when seen from the captured direction, and the pasted image looks slightly shifted when tilted a lot.
 
-そこで、物体の正面から離れて見るほど物体を透明にしています。正面は点群から求めた面の向きで（本や画面なら表面の向き）、それと今の視点から見た向きの内積で決めていて、真横ではほとんど透明に、裏側からは見えなくなります。撮影したカメラの方向ではなく面の向きを基準にしているので、机の上の本のように斜めから撮った物でも、表面を自分に向けた姿勢から上下左右のどちらへ傾けても、同じ角度で透けていきます。物体をつかんで動かしたり回したりすると、正面も物体と一緒に動くので、表面を自分の方へ向け直せば再び見えます。
+That is why the object is made more transparent the further you are from its front. The front is the surface direction obtained from the point cloud (the face of a book or a screen), and transparency is decided by the dot product between it and the direction seen from the current viewpoint: almost transparent edge-on, and invisible from behind. Because it is based on the surface direction rather than the direction of the capturing camera, even an object shot from an angle, like a book on a desk, fades at the same angle whether you tilt it up, down, left, or right from a pose where the surface faces you. When you grab and move or rotate the object, its front moves with it, so turning the surface back toward you makes it visible again.
 
-つかむ仕組みは Meta XR Interaction SDK の部品をそのまま使っています。プレハブ `GrabbableSearchResult` に `Grabbable` / `GrabFreeTransformer` / `GrabInteractable` が付いていて、シーンのインタラクションリグにあるコントローラの `ControllerGrabInteractor` からつかめます。`2-SpatialSearchLiteFrame(Experimental)` シーンのプレハブ `GrabbableCopy` には `HandGrabInteractable` も付いていて、手の `HandGrabInteractor` からもつかめます。
+The grabbing mechanism uses components of the Meta XR Interaction SDK as they are. The prefab `GrabbableSearchResult` has `Grabbable` / `GrabFreeTransformer` / `GrabInteractable` attached, and it can be grabbed with the controller's `ControllerGrabInteractor` in the scene's interaction rig. The prefab `GrabbableCopy` in the `2-SpatialSearchLiteFrame(Experimental)` scene also has `HandGrabInteractable` attached, so it can be grabbed with the hand's `HandGrabInteractor` too.
 
-手の枠で指した点は、実世界の位置（深度にレイが当たった位置）として覚えます。手を下ろしてから撮影した画像へこの位置を投影し直すので、枠を作った手は撮影した画像に写りません。レイは頭の中心から引くので、両目で見ている枠の中心とは少しずれますが、点を見ながら物体に合わせれば気になりません。
+The point indicated with the hand frame is remembered as a real-world position (where the ray hit the depth). After the hands are lowered, this position is projected again onto the captured image, so the hands that made the frame do not appear in the captured image. The ray is cast from the center of the head, so it is slightly offset from the center of the frame as seen with both eyes, but this is not noticeable if you align it with the object while watching the dot.
 
-サーバー側は `server/` にあります。`server.py` がUnityとのWebSocket通信を、`sam3_comfyui.py` がComfyUIの呼び出しを担当します。検索語の代わりに画像上の点（`{"type": "point", "x": .., "y": .., "image": ..}`、左上が原点のピクセル）を受け取ると、SAM 3.1 の点プロンプト（`SAM3_Detect` の `positive_coords`）で、その点に写っている物体1つのマスクを返します。
+The server side is in `server/`. `server.py` handles the WebSocket communication with Unity, and `sam3_comfyui.py` handles calls to ComfyUI. When it receives a point on the image (`{"type": "point", "x": .., "y": .., "image": ..}`, pixels with the origin at the top left) instead of a search term, it returns the mask of the one object at that point, using SAM 3.1's point prompt (`positive_coords` of `SAM3_Detect`).

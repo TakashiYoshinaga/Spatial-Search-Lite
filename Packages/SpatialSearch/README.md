@@ -1,31 +1,33 @@
 # SpatialSearch
 
-カメラ画像から言葉や点で指定した物体を探し、深度の点群と組み合わせて表示する Unity パッケージです（`com.yoshinaga.spatialsearch`、名前空間 `SpatialSearch`）。
+English | [日本語](README_JP.md)
 
-物体を探す処理はPCのPythonサーバー（このリポジトリの `server/`、ComfyUI の SAM 3.1 を使用）が受け持ち、このパッケージは、サーバーへ送る内容の組み立てと返ってきた結果の受け取り、結果の表示を受け持ちます。カメラ画像と深度の撮影、サーバーとの通信（WebSocketなど）は機器や環境ごとに違うので、使う側のプロジェクトで用意します（Meta Quest 用の例は `UnityMetaQuest/Assets/Scripts/SpatialSearchLite/` の `SearchCapture.cs` と `WebSocketSearchTransport.cs`）。
+A Unity package that finds an object specified by a word or a point in the camera image, and displays it combined with a depth point cloud (`com.yoshinaga.spatialsearch`, namespace `SpatialSearch`).
 
-ボタンや文字などのUIは持ちません。検索の状態や見つかった数は Observable で知らせるので、表示の仕方は使う側で決めます。
+The work of finding objects is done by a Python server on a PC (this repository's `server/`, which uses SAM 3.1 in ComfyUI). This package handles building what is sent to the server, receiving the returned result, and displaying that result. Capturing the camera image and depth, and communicating with the server (WebSocket and so on), differ from device to device and environment to environment, so the project using this package provides them (for Meta Quest, the examples are `SearchCapture.cs` and `WebSocketSearchTransport.cs` in `UnityMetaQuest/Assets/Scripts/SpatialSearchLite/`).
+
+It has no UI such as buttons or text. The search status and the number of objects found are announced through Observables, so how to display them is up to the project using the package.
 
 ```text
-撮影するクラス（プロジェクトで用意） ─CaptureData─▶ SearchClient ─JSON─▶ 通信路（プロジェクトで用意） ─▶ Python サーバー
-結果を表示するクラス               ◀─SearchResult─ SearchClient ◀─JSON─ 通信路（プロジェクトで用意） ◀─ Python サーバー
-              （撮影・結果・接続の状態は SpatialSearchDataSource を通してやり取りする）
+Capturing class (provided by the project) ─CaptureData─▶ SearchClient ─JSON─▶ Transport (provided by the project) ─▶ Python server
+Class that shows results                  ◀─SearchResult─ SearchClient ◀─JSON─ Transport (provided by the project) ◀─ Python server
+              (capture, result, and connection state are exchanged through SpatialSearchDataSource)
 ```
 
-## 必要なもの
+## Requirements
 
-| パッケージ | 入れ方 |
+| Package | How to add it |
 |---|---|
-| R3（`com.cysharp.r3` と `org.nuget.r3`） | 使う側の `manifest.json` に OpenUPM と UnityNuGet の scoped registry を設定し、両パッケージを追加します |
-| URP（`com.unity.render-pipelines.universal`） | シェーダーが URP 用です |
+| R3 (`com.cysharp.r3` and `org.nuget.r3`) | In the using project's `manifest.json`, set up the OpenUPM and UnityNuGet scoped registries and add both packages |
+| URP (`com.unity.render-pipelines.universal`) | The shaders are for URP |
 
-このパッケージの `package.json` では `dependencies` が空なので、R3 と URP は自動では入りません。使う側のプロジェクトで追加してください。レジストリの設定とバージョンの例は、[このリポジトリの manifest.json](../../UnityMetaQuest/Packages/manifest.json) にあります。
+This package's `package.json` has empty `dependencies`, so R3 and URP are not added automatically. Add them in the project that uses the package. An example of the registry settings and versions is in [this repository's manifest.json](../../UnityMetaQuest/Packages/manifest.json).
 
-R3 の具体的な導入操作は、[R3 and UniTask Installation Guide（英語・画像付き）](../../docs/ExternalTools/R3_UniTask_Installation.md) を参照してください。
+For the concrete steps to install R3, see the [R3 and UniTask Installation Guide (with images)](../../docs/ExternalTools/R3_UniTask_Installation.md).
 
-通信のライブラリには依存しません。通信路（`SearchTransportBase` を継承したクラス）が使うパッケージは、使う側で入れてください。
+It does not depend on any communication library. The packages that the transport (a class inheriting `SearchTransportBase`) uses should be added by the project using the package.
 
-`manifest.json` の `dependencies` に追加する項目の例です。パスは `manifest.json` から見た相対パスなので、別のプロジェクトでは配置に合わせて変更してください。WebSocketSharpUtl は、このリポジトリの WebSocket 版の通信路を使う場合に必要です。既存の依存パッケージは残してください。
+Here is an example of the entries to add to `dependencies` in `manifest.json`. The paths are relative to `manifest.json`, so change them to match the layout in another project. WebSocketSharpUtl is needed when you use this repository's WebSocket transport. Keep your existing dependencies.
 
 ```json
 {
@@ -36,42 +38,42 @@ R3 の具体的な導入操作は、[R3 and UniTask Installation Guide（英語�
 }
 ```
 
-## 中身
+## Contents
 
-| クラス・アセット | 役割 |
+| Class / asset | Role |
 |---|---|
-| `SpatialSearchDataSource` | 各クラスの間でデータを受け渡す場所。撮影データ（`CaptureObservable`）、検索結果（`ResultObservable`）、接続の状態（`ConnectedObservable`）を流します |
-| `CaptureData` / `ImageProjection` | 撮影した瞬間のデータと、ワールド座標をカメラ画像のUVへ投影する計算（`SearchData.cs`） |
-| `SearchResult` / `Detection` | 検索結果。見つかった物体ごとのマスク画像（`SearchData.cs`） |
-| `SearchClient` | 撮影データを受け取ってJSONにし、通信路でサーバーへ送り、返ってきたマスクを検索結果にして流します。同じ GameObject にある通信路を自動で探します（別の GameObject にあるときは、Inspector の Transport に設定します） |
-| `SearchTransportBase` | サーバーとの通信路の共通の入り口。文字列の送受信と接続の状態だけを決めてあり、WebSocket や HTTP などの実装は使う側で継承して作ります（下の「通信路の実装」） |
-| `SearchResultViewBase` | 結果を表示するクラスの共通の入り口。表示し終えたら `ShownObservable` で、表示した結果と物体の数（`ShownResult`）を知らせます |
-| `SearchResultView` | マスクに写っていた点を、まとめて単色の点群で表示します |
-| `GrabbableSearchResultView` | 見つかった物体ごとにひな形を複製し、撮影したカメラ画像を貼った四角形で表示します。つかめる範囲（`BoxCollider`）も物体に合わせます |
-| `SearchResultMeshBuilder` | `GrabbableSearchResultView` が使う、カメラ画像を貼った四角形のメッシュを作る部品 |
-| `Shaders/SpatialSearchHighlightPointsURP`、`Materials/SpatialSearchHighlightMat` | `SearchResultView` の点群用 |
-| `Shaders/SpatialSearchColoredPointsURP`、`Materials/SpatialSearchColoredPointsMat` | `GrabbableSearchResultView` の四角形用 |
+| `SpatialSearchDataSource` | The place where data is handed between the classes. It emits the capture data (`CaptureObservable`), the search result (`ResultObservable`), and the connection state (`ConnectedObservable`) |
+| `CaptureData` / `ImageProjection` | The data at the moment of capture, and the calculation that projects world coordinates onto the camera image's UV (`SearchData.cs`) |
+| `SearchResult` / `Detection` | The search result. A mask image for each object found (`SearchData.cs`) |
+| `SearchClient` | Receives the capture data, turns it into JSON, sends it to the server through the transport, and emits the returned masks as a search result. It automatically finds the transport on the same GameObject (if it is on a different GameObject, set it in the Inspector's Transport) |
+| `SearchTransportBase` | The common entry point for the communication path to the server. It defines only sending and receiving strings and the connection state; implementations such as WebSocket or HTTP are made by inheriting it in the project using the package (see "Implementing a transport" below) |
+| `SearchResultViewBase` | The common entry point for classes that show results. When it finishes displaying, it announces the displayed result and the number of objects (`ShownResult`) through `ShownObservable` |
+| `SearchResultView` | Shows the points that fall on the mask together as a single-color point cloud |
+| `GrabbableSearchResultView` | Clones the template for each found object and displays it as quads textured with the captured camera image. It also fits the grabbable range (`BoxCollider`) to the object |
+| `SearchResultMeshBuilder` | A helper used by `GrabbableSearchResultView` that builds the mesh of quads textured with the camera image |
+| `Shaders/SpatialSearchHighlightPointsURP`, `Materials/SpatialSearchHighlightMat` | For `SearchResultView`'s point cloud |
+| `Shaders/SpatialSearchColoredPointsURP`, `Materials/SpatialSearchColoredPointsMat` | For `GrabbableSearchResultView`'s quads |
 
-## 使い方
+## Usage
 
-1. 撮影するクラスを用意し、`CaptureData` を作って `SpatialSearchDataSource.SetCapture` に流します（下の「撮影データの約束」）
-2. 通信路を用意します。`SearchTransportBase` を継承したクラスを作ります（下の「通信路の実装」）
-3. `SearchClient`、通信路、結果を表示するクラス（`SearchResultView` か `GrabbableSearchResultView` のどちらか1つ）をシーンに置きます。`SearchClient` と通信路は同じ GameObject に付けます。別の GameObject に置く場合は、`SearchClient` の Inspector の Transport に通信路を設定します
-4. 起動時に、同じ `SpatialSearchDataSource` を各クラスの `Initialize` に渡します（通信路には渡しません。`SearchClient` が通信路を使います）
-5. 状態を表示したいときは、`CaptureObservable`（検索を始めた）と `ShownObservable`（結果を表示し終えた）を購読します。**`SearchClient.Initialize` より先に購読してください**。未接続のとき `SearchClient` は撮影を受け取ったその場でエラー結果を流すので、後から購読すると「検索中」の表示がエラーの表示を上書きしてしまいます
-6. `SearchClient.Connect(サーバーのIP)` で接続します（ポートなど接続先の細かい設定は、通信路の実装が決めます。このリポジトリの WebSocket 版は Inspector の Server Port で、既定は 8765）
+1. Prepare a capturing class, build a `CaptureData`, and feed it to `SpatialSearchDataSource.SetCapture` (see "The capture data contract" below)
+2. Prepare a transport. Create a class that inherits `SearchTransportBase` (see "Implementing a transport" below)
+3. Place `SearchClient`, the transport, and a class that shows results (either `SearchResultView` or `GrabbableSearchResultView`, only one) in the scene. Attach `SearchClient` and the transport to the same GameObject. If you place them on different GameObjects, set the transport in the `SearchClient` Inspector's Transport
+4. At startup, pass the same `SpatialSearchDataSource` to each class's `Initialize` (not to the transport; `SearchClient` uses the transport)
+5. To show the status, subscribe to `CaptureObservable` (a search started) and `ShownObservable` (a result finished displaying). **Subscribe before `SearchClient.Initialize`.** When not connected, `SearchClient` emits an error result the moment it receives a capture, so if you subscribe later, the "searching" display overwrites the error display
+6. Connect with `SearchClient.Connect(server IP)` (the details of the destination such as the port are decided by the transport implementation; for this repository's WebSocket version it is Server Port in the Inspector, 8765 by default)
 
-次は `MonoBehaviour` の `Awake` などで行う初期化の抜粋です。`capture`、`resultView`、`client`、`status` は、使う側で用意した撮影クラス、表示クラス、`SearchClient`、状態表示用のテキストへの参照です。
+Here is an excerpt of the initialization done in a `MonoBehaviour`'s `Awake` or similar. `capture`, `resultView`, `client`, and `status` are references to the capturing class, the display class, the `SearchClient`, and a text for showing the status, which the project using the package provides.
 
 ```csharp
 using R3;
 using SpatialSearch;
 
 var dataSource = new SpatialSearchDataSource();
-capture.Initialize(dataSource);    // プロジェクトで用意した撮影クラス
+capture.Initialize(dataSource);    // the capturing class provided by the project
 resultView.Initialize(dataSource); // SearchResultViewBase
 
-// 状態の表示（任意）。SearchClient より先に購読する
+// Show the status (optional). Subscribe before SearchClient
 dataSource.CaptureObservable.Subscribe(c => status.text = $"Searching \"{c.Query}\"...").AddTo(this);
 resultView.ShownObservable.Subscribe(shown => status.text = shown.Result.IsSuccess
     ? $"Found {shown.ObjectCount}"
@@ -81,62 +83,62 @@ client.Initialize(dataSource);     // SearchClient
 client.Connect("192.168.0.10");
 ```
 
-`ShownResult.ObjectCount` は、`SearchResultView` では検出された物体数（点を1つも表示できなければ0）、`GrabbableSearchResultView` では実際に生成した物体数です。マスクの位置に深度の点がない物体は、Grab版では生成されません。
+`ShownResult.ObjectCount` is the number of detected objects for `SearchResultView` (0 if not a single point could be shown), and the number of objects actually generated for `GrabbableSearchResultView`. In the Grab version, an object with no depth points at the mask's position is not generated.
 
-撮影データは Unity のメインスレッドから `SetCapture` に流してください。前の検索の結果待ちの間に流した撮影は、`SearchClient` が無視し、その撮影の画像を破棄します。
+Feed the capture data to `SetCapture` from Unity's main thread. A capture fed in while waiting for the previous search's result is ignored by `SearchClient`, and that capture's image is destroyed.
 
-### 結果の表示の設定
+### Display settings
 
-- `SearchResultView`: Point Material に `SpatialSearchHighlightMat` を設定します。Color / Point Size で点の色と大きさを変えられます
-- `GrabbableSearchResultView`: Object Template に、物体1つぶんのひな形を設定します。ひな形には `MeshFilter` と `MeshRenderer`（マテリアルは `SpatialSearchColoredPointsMat`）を付けます。つかめるようにするときは、つかむ仕組み（Meta XR Interaction SDK の `Grabbable` / `GrabInteractable` など）と `BoxCollider` もひな形に付けます。このパッケージはつかむ仕組みには依存しません
+- `SearchResultView`: set `SpatialSearchHighlightMat` as the Point Material. You can change the points' color and size with Color / Point Size
+- `GrabbableSearchResultView`: set a template for a single object as the Object Template. Give the template a `MeshFilter` and a `MeshRenderer` (with the material `SpatialSearchColoredPointsMat`). To make it grabbable, also give the template a grab mechanism (such as the Meta XR Interaction SDK's `Grabbable` / `GrabInteractable`) and a `BoxCollider`. This package does not depend on the grab mechanism
 
-### 通信路の実装
+### Implementing a transport
 
-`SearchTransportBase`（`MonoBehaviour`）を継承して、サーバーと文字列をやり取りするクラスを作ります。JSON の組み立てや結果の読み取り、検索中の管理は `SearchClient` が行うので、通信路は文字列を運ぶだけです。
+Create a class that inherits `SearchTransportBase` (a `MonoBehaviour`) and exchanges strings with the server. `SearchClient` builds the JSON, reads the result, and manages the search in progress, so the transport only carries strings.
 
-| 実装するもの | 内容 |
+| What to implement | Description |
 |---|---|
-| `IsConnected` | 今つながっているか |
-| `Connect(serverIp)` | 指定したIPのサーバーへ接続します。接続中なら切断してから繋ぎ直します。ポートやURLの組み立ては実装側で決めます |
-| `Reconnect()` | 前回と同じサーバーへ繋ぎ直します。未接続のまま検索が始まったときに `SearchClient` が呼びます |
-| `Send(message, completed)` | 文字列を送り、送れたかどうかを `completed(true / false)` で必ず知らせます。`false` のとき `SearchClient` は検索を失敗として扱います |
-| `NotifyConnected(bool)` | 接続できたら `true`、切れたとき（接続に失敗したときも）`false` で呼びます |
-| `NotifyMessage(string)` | サーバーから文字列を受け取ったら呼びます |
+| `IsConnected` | Whether it is connected now |
+| `Connect(serverIp)` | Connects to the server at the given IP. If already connected, it disconnects first and reconnects. Building the port and URL is up to the implementation |
+| `Reconnect()` | Reconnects to the same server as last time. `SearchClient` calls it when a search starts while not connected |
+| `Send(message, completed)` | Sends a string and always reports whether it could be sent through `completed(true / false)`. When it is `false`, `SearchClient` treats the search as failed |
+| `NotifyConnected(bool)` | Call with `true` when connected, and with `false` when disconnected (also when connecting fails) |
+| `NotifyMessage(string)` | Call when a string is received from the server |
 
-`NotifyConnected` / `NotifyMessage` と `completed` は、別スレッドから呼んでかまいません。メインスレッドへ戻す処理は `SearchClient` が行います。
+`NotifyConnected` / `NotifyMessage` and `completed` may be called from another thread. `SearchClient` handles returning to the main thread.
 
-Meta Quest 用の WebSocket 版の例は `UnityMetaQuest/Assets/Scripts/SpatialSearchLite/WebSocketSearchTransport.cs` にあります（`WebSocketSharpUtl` の `WebSocketClientManager` を包んでいます）。
+An example of the WebSocket version for Meta Quest is in `UnityMetaQuest/Assets/Scripts/SpatialSearchLite/WebSocketSearchTransport.cs` (it wraps `WebSocketSharpUtl`'s `WebSocketClientManager`).
 
-## 撮影データの約束（CaptureData）
+## The capture data contract (CaptureData)
 
-| 項目 | 内容 |
+| Item | Description |
 |---|---|
-| `Query` | 検索語。点で探すときは表示用の名前 |
-| `HasPoint` / `PointUv` | `HasPoint` が true なら、検索語ではなく `PointUv`（0〜1、左下原点のカメラ画像のUV）に写っている物体1つを探します |
-| `Image` | 撮影したカメラ画像。PNGへ変換するため、CPUから読み出せる `Texture2D` を撮影ごとに新しく作ります。結果の表示に使い続けるので、使い回して上書きしないでください |
-| `Points[i]` | 深度の各点のワールド座標 |
-| `ImageUvs[i]` | `Points[i]` がカメラ画像のどこに写るか（0〜1、**左下が原点**）。マスクをこのUVで引いて、点が物体上にあるかを決めます |
-| `Depths[i]` | 点の深度（m） |
-| `Normals[i]` | 点での面の向き（長さ1、カメラの側を向く）。求められない点は `Vector3.zero` |
-| `PixelRightPerMeter` / `PixelUpPerMeter` | 深度1画素ぶんの右・上への幅を、1m先で測ったワールドのベクトル（深度に比例する） |
-| `Projection` | 撮影した瞬間のカメラで、ワールド座標をカメラ画像のUVへ投影する `ImageProjection` |
+| `Query` | The search term. For a search by point, a name for display |
+| `HasPoint` / `PointUv` | When `HasPoint` is true, it finds the one object at `PointUv` (0–1, UV of the camera image with the origin at the bottom left) instead of using the search term |
+| `Image` | The captured camera image. To convert it to PNG, create a new CPU-readable `Texture2D` for each capture. Because it keeps being used to display the result, do not reuse and overwrite it |
+| `Points[i]` | World coordinates of each depth point |
+| `ImageUvs[i]` | Where `Points[i]` appears in the camera image (0–1, **origin at the bottom left**). The mask is sampled at this UV to decide whether the point is on the object |
+| `Depths[i]` | Depth of the point (m) |
+| `Normals[i]` | Surface direction at the point (length 1, facing the camera side). `Vector3.zero` for points where it cannot be determined |
+| `PixelRightPerMeter` / `PixelUpPerMeter` | The world-space vectors for the width of one depth pixel to the right and up, measured at 1 m (proportional to depth) |
+| `Projection` | An `ImageProjection` that projects world coordinates onto the camera image's UV using the camera at the moment of capture |
 
-`Points` と `ImageUvs` は、同じ点を同じ添字で表す、同じ長さの配列にしてください。画像の外へ投影される点は除外し、`ImageUvs` の各成分を0〜1の範囲にします。`GrabbableSearchResultView` を使う場合は、`Depths` と `Normals` も同じ長さで用意し、`PixelRightPerMeter`、`PixelUpPerMeter`、`Projection` を設定します。法線が求められなくても `Normals` の配列は必要で、その点の値を `Vector3.zero` にします。
+Make `Points` and `ImageUvs` arrays of the same length, with the same index representing the same point. Exclude points that project outside the image, and keep each component of `ImageUvs` within 0–1. When using `GrabbableSearchResultView`, also prepare `Depths` and `Normals` with the same length, and set `PixelRightPerMeter`, `PixelUpPerMeter`, and `Projection`. Even if normals cannot be determined, the `Normals` array is still needed; set those points' values to `Vector3.zero`.
 
-`HasPoint` / `PointUv` を使うのは `SearchClient` だけです。表示には、`SearchResultView` は `Query`（ログ用）、`Points`、`ImageUvs` を使い、`GrabbableSearchResultView` は、それ以外の項目もすべて使います。UIに検索語を出す場合は、`ShownResult.Result.Capture.Query` を参照します。
+Only `SearchClient` uses `HasPoint` / `PointUv`. For display, `SearchResultView` uses `Query` (for logging), `Points`, and `ImageUvs`, and `GrabbableSearchResultView` uses all the other items too. To show the search term in the UI, refer to `ShownResult.Result.Capture.Query`.
 
-両方の表示クラスは、新しい結果を受け取ったときに前の結果の `Image` と各 `Detection.Mask` を `Destroy` します。表示クラス自体が破棄されたときも同様です。表示直後に画像を破棄するわけではありません。同じ結果を複数の表示クラスで共有すると破棄が重複するので、この実装では表示クラスを1つにしてください。
+Both display classes `Destroy` the previous result's `Image` and each `Detection.Mask` when they receive a new result. The same happens when the display class itself is destroyed. The image is not destroyed immediately after being displayed. If one result is shared by several display classes, destruction would be duplicated, so use only one display class in this implementation.
 
-## サーバーとの通信
+## Communication with the server
 
-`server/server.py` との間で、JSON の文字列をやり取りします。JSON を作って読むのは `SearchClient` で、運ぶのは通信路です。サーバーはWebSocketで待ち受けるので、このリポジトリの通信路はWebSocketです（HTTPなど別の方法にするときは、同じJSONをその方法で受け付けるサーバーも必要です）。
+JSON strings are exchanged with `server/server.py`. `SearchClient` builds and reads the JSON, and the transport carries it. The server listens over WebSocket, so this repository's transport is WebSocket (to use another method such as HTTP, you also need a server that accepts the same JSON by that method).
 
-| 向き | メッセージ |
+| Direction | Message |
 |---|---|
-| Unity → サーバー（検索語） | `{"type": "search", "query": "monitor", "image": "<PNGのbase64>"}` |
-| Unity → サーバー（点） | `{"type": "point", "x": 640, "y": 480, "image": "<PNGのbase64>"}`。x, y は画像のピクセルで **左上が原点**（`SearchClient` が `PointUv` の上下を反転して送ります） |
-| サーバー → Unity | `{"type": "result", "query": "...", "detections": [{"score": 0.93, "mask": "<PNGのbase64>"}, ...]}` または `{"type": "error", "message": "..."}` |
+| Unity → server (search term) | `{"type": "search", "query": "monitor", "image": "<base64 of PNG>"}` |
+| Unity → server (point) | `{"type": "point", "x": 640, "y": 480, "image": "<base64 of PNG>"}`. x, y are image pixels with the **origin at the top left** (`SearchClient` flips `PointUv` vertically before sending) |
+| Server → Unity | `{"type": "result", "query": "...", "detections": [{"score": 0.93, "mask": "<base64 of PNG>"}, ...]}` or `{"type": "error", "message": "..."}` |
 
-検索語は空白だけの文字列にせず、`,` と `:` を含めないでください。このリポジトリのサーバーではエラーになります。点で探した場合、サーバーが返す `query` は空文字列ですが、Unity側の `SearchResult.Capture.Query` には撮影時の表示用の名前が残ります。
+Do not make the search term a whitespace-only string, and do not include `,` or `:`. This repository's server returns an error for those. For a search by point, the `query` the server returns is an empty string, but `SearchResult.Capture.Query` on the Unity side keeps the display name from the time of capture.
 
-マスクは送った画像と同じ大きさで、白い部分が物体です。点で探して成功したときは `detections` が1件になります。
+The mask is the same size as the image you sent, and the white part is the object. When a search by point succeeds, `detections` has one entry.
