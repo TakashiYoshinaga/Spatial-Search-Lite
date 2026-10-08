@@ -1,224 +1,157 @@
 # Spatial-Search-Lite
 
-Meta Quest で見ている現実の空間から、言葉で指定した物体を探して、その場所を点群でハイライトするサンプルです。
+**Meta Quest で、目の前の物を言葉やジェスチャーで探す空間検索アプリです。**
 
-検索ウィンドウに「monitor」と入力して Search を押すと、Questのカメラ画像をPCへ送り、画像認識AI（SAM 3.1）が見つけた物体の位置に点群が表示されます。
+`monitor` や `chair` と入力すると、見つかった物の位置が点群でハイライトされます。見つけた物をつかんで動かしたり、両手の指で作った枠で物を切り出してコピーしたりするシーンもあります。
 
-両手で写真を撮るときの枠を作って物体を指すと、検索語なしでその物体1つだけを切り出して複製することもできます（[7. 指の枠で物体をコピーする](#7-指の枠で物体をコピーする2-spatialsearchliteframeexperimental-シーン)）。
-
-```text
-Quest : カメラ画像 + 深度 を撮影 ──(WebSocket)──▶ PC : Pythonサーバー ──▶ ComfyUI (SAM 3.1)
-Quest : マスクに写っていた深度の点を表示 ◀──(WebSocket)── PC : 物体ごとのマスク画像
-```
-
-## デモ動画
-
-| シーン | 動画 |
+| 体験できること | デモ動画 |
 |---|---|
-| `0-SpatialSearchLite` : 検索した物を単色の点群で表示 | [YouTube](https://youtu.be/CpNNvYJ_eqo) |
-| `1-SpatialSearchLiteGrab` : 見つけた物をつかんで動かす | [YouTube](https://youtu.be/KBflmsotNTc) |
-| `2-SpatialSearchLiteFrame(Experimental)` : 指の枠で物体をコピーする | [YouTube](https://youtu.be/BAKXGBKgiSI) |
+| 言葉で探した物をハイライトする | [YouTube](https://youtu.be/CpNNvYJ_eqo) |
+| 見つけた物をつかんで動かす | [YouTube](https://youtu.be/KBflmsotNTc) |
+| 指の枠で物をコピーする（実験機能） | [YouTube](https://youtu.be/BAKXGBKgiSI) |
+
+**体験には Meta Quest 3 / 3S と、AI処理を行うPCが必要です。** この手順では、リポジトリをPCに取得し、UnityでアプリをビルドしてQuestへインストールします。
+
+- [必要なもの](#必要なもの)
+- [初回の準備](#初回の準備)
+- [起動して検索する](#起動して検索する)（2回目以降はここから）
+- [うまくいかないとき](#うまくいかないとき)
 
 ## 必要なもの
 
-| 用途 | 必要なもの |
+| 必要なもの | 用途・条件 |
 |---|---|
-| ヘッドセット | Meta Quest 3 / 3S（パススルーカメラと深度を使います。指の枠を使うときはハンドトラッキングも使います） |
-| Unity | Unity 6000.3.7f1、Android Build Support |
-| PC（AI側） | [ComfyUI](https://www.comfy.org/)、SAM 3.1 のチェックポイント `sam3.1_multiplex_fp16.safetensors`、Python 3.10 以上 |
+| Meta Quest 3 / 3S とコントローラ | パススルーカメラと深度を使います |
+| PC | ComfyUIで SAM 3.1 を動かせる環境。Python 3.10 以上も必要です |
+| [ComfyUI](https://www.comfy.org/) と SAM 3.1 のモデル | カメラ画像から物体を探します。モデルの準備は下の手順で行います |
+| Unity 6000.3.7f1 | アプリのビルド用。Android Build Support（SDK・NDK・OpenJDKを含む）を入れてください |
+| USBケーブル | ビルドしたアプリをPCからQuestへ入れるために使います |
+| 同じLANへの接続 | Questと、Pythonサーバーを動かすPCを同じネットワークにつなぎます |
 
-QuestとPCは同じLANにつないでください。
+Questのカメラ画像をPCへ送り、PCで物体を認識した結果をQuestに表示します。**体験中はPCで ComfyUI と Pythonサーバーを起動しておいてください。**
 
-## 使い方
+## 初回の準備
 
-起動する順番は **ComfyUI → Pythonサーバー → Questアプリ** です。
+### 1. リポジトリをPCに取得する
 
-### 1. ComfyUIを準備して起動する
-
-#### ComfyUIを最新にする
-
-SAM 3.1 を動かすノード（`SAM3_Detect` など。名前は SAM3 ですが SAM 3.1 もこのノードで動きます）はComfyUI本体に入っている新しいノードです。古いComfyUIでは動かないので、最新版に更新してください。
-
-#### SAM 3.1 のチェックポイントを置く（初回だけ）
-
-1. ComfyUI公式の Hugging Face リポジトリ [Comfy-Org/sam3.1](https://huggingface.co/Comfy-Org/sam3.1) から [`sam3.1_multiplex_fp16.safetensors`](https://huggingface.co/Comfy-Org/sam3.1/blob/main/checkpoints/sam3.1_multiplex_fp16.safetensors)（約1.75GB）をダウンロードします。ページのダウンロードボタンから保存できます。コマンドで取得する場合は次のとおりです
-
-   ```bash
-   curl -L -o sam3.1_multiplex_fp16.safetensors https://huggingface.co/Comfy-Org/sam3.1/resolve/main/checkpoints/sam3.1_multiplex_fp16.safetensors
-   ```
-
-2. ダウンロードしたファイルを、ComfyUIの `models/checkpoints/` フォルダへ入れます。**ファイル名は変えないでください**
-
-   ```text
-   ComfyUI/
-   └── models/
-       └── checkpoints/
-           └── sam3.1_multiplex_fp16.safetensors
-   ```
-
-   - **ポータブル版・git clone版：** ComfyUI本体のフォルダの中にある `models/checkpoints/` です
-   - **ComfyUI Desktop：** インストール時に選んだデータの保存先の中にある `models/checkpoints/` です（本体のインストール先ではありません）。場所が分からないときは、Desktopのメニューからモデルフォルダを開けます
-
-3. ComfyUIが起動中なら再起動します
-
-SAM 3.1 のモデルは SAM License で配布されています。
-
-#### ComfyUIを起動する
-
-ComfyUIを普段どおり起動します。**画面で何かを操作する必要はありません。** 起動しておくだけで大丈夫です。開発者モード（dev mode）も不要です。
-
-### 2. Pythonサーバーを起動する
-
-初回だけ依存パッケージを入れます。
+Gitを使う場合は、次のコマンドを実行します。
 
 ```bash
-pip install -r server/requirements.txt
+git clone https://github.com/TakashiYoshinaga/Spatial-Search-Lite.git
+cd Spatial-Search-Lite
 ```
 
-サーバーを起動します。Questから接続するので `--host 0.0.0.0` を付けます。
+Gitを使わない場合は、このページの **Code → Download ZIP** からダウンロードして展開します。
+
+**以降のPythonコマンドは、`README.md` があるフォルダで実行してください。** ZIPを使った場合も、展開したフォルダをターミナルで開きます。
+
+### 2. PCのAI環境を準備する
+
+#### ComfyUIとモデルを準備する
+
+1. [ComfyUI](https://www.comfy.org/) をインストールします。すでに使っている場合は最新版に更新してください。サーバーが使う `SAM3_Detect` などのノードが必要です。
+2. [`sam3.1_multiplex_fp16.safetensors` をダウンロード](https://huggingface.co/Comfy-Org/sam3.1/blob/main/checkpoints/sam3.1_multiplex_fp16.safetensors)し、**ファイル名を変えずに** ComfyUIの `models/checkpoints/` に置きます。
+
+モデルの配置先は次のとおりです。
+
+```text
+ComfyUI/
+└── models/
+    └── checkpoints/
+        └── sam3.1_multiplex_fp16.safetensors
+```
+
+- **ポータブル版・git clone版：** ComfyUI本体のフォルダ内の `models/checkpoints/` に置きます。
+- **ComfyUI Desktop：** **Menu → Desktop Settings → Storage** を開き、**Shared Models** でモデルフォルダの場所を確認してください。
+
+モデルを置いたあと、ComfyUIが起動中の場合は再起動してください。
+
+#### Pythonサーバーを準備する
+
+リポジトリのルートで、Pythonサーバーの依存パッケージをインストールします。
+
+```bash
+python -m pip install -r server/requirements.txt
+```
+
+### 3. Questアプリをビルドして入れる
+
+1. Questを開発者モードにし、PCとUSBで接続します。Questに **USBデバッグを許可**する確認が出たら許可してください。初めて設定する場合は、[Meta公式のヘッドセット設定手順](https://developers.meta.com/vr/documentation/unity/unity-env-device-setup/?locale=ja_JP)を参照してください。
+2. Unity Hubから、このリポジトリの **`UnityMetaQuest` フォルダ**を Unity 6000.3.7f1 で開きます。
+3. まずは **`Assets/Scenes/0-SpatialSearchLite.unity`** を開きます。
+4. **File → Build Profiles** で Android のプロファイルを選び、有効にします。プロファイルがなければ **Add Build Profile → Android** で作成し、**Switch Profile** を押します。
+5. **Scene List** に開いたシーンを追加し、**体験するシーンだけにチェック**を入れます。
+6. **Run Device** に接続したQuestを選び、**Build And Run** を実行します。保存先を指定すると、ビルド後にQuestへインストールされ、アプリが起動します。
+
+ビルド画面の詳しい操作は、[Unity公式のAndroidビルド手順](https://docs.unity.com/en-us/engine/6000.3/manual/platform-specific/android/building-and-delivering/build-process)を参照してください。
+
+ほかの体験を試すときは、次のシーンに切り替えてビルドし直します。シーンはすべて `UnityMetaQuest/Assets/Scenes/` にあります。
+
+| シーンファイル | 体験できること |
+|---|---|
+| `0-SpatialSearchLite.unity` | 言葉で探した物を単色の点群で表示する（最初に試すシーン） |
+| `1-SpatialSearchLiteGrab.unity` | 探した物をカメラ画像付きで表示し、コントローラでつかんで動かす |
+| `2-SpatialSearchLiteFrame(Experimental).unity` | 指の枠で物をコピーする。言葉での検索もでき、結果を手でもつかめる |
+
+## 起動して検索する
+
+初回の準備が終わったら、**ComfyUI → Pythonサーバー → Questアプリ** の順に起動します。2回目以降も同じ手順です。
+
+### 1. ComfyUIとPythonサーバーを起動する
+
+ComfyUIを普段どおり起動します。ワークフローはサーバーから実行するので、ComfyUIの画面での操作は不要です。
+
+続いて、リポジトリのルートでPythonサーバーを起動します。
 
 ```bash
 python server/server.py --host 0.0.0.0
 ```
 
-`listening on ws://0.0.0.0:8765/` と表示されれば準備完了です。止めるときは `Ctrl+C` を押します。
+`listening on ws://0.0.0.0:8765/` と表示されれば、Questからの接続を受け付ける準備ができています。このターミナルは開いたままにします。終了するときは `Ctrl+C` を押してください。
 
-| オプション | 既定値 | 内容 |
-|---|---|---|
-| `--host` | `127.0.0.1` | 待ち受けるアドレス。Questから繋ぐときは `0.0.0.0` |
-| `--port` | `8765` | 待ち受けるポート |
-| `--comfyui` | `http://127.0.0.1:8188` | ComfyUIのURL |
-| `--checkpoint` | `sam3.1_multiplex_fp16.safetensors` | SAM 3.1 のチェックポイント名 |
-| `--threshold` | `0.5` | これより自信の低い検出は捨てます。見つからないときは下げてみてください |
-| `--max-detections` | `8` | 1回の検索で見つける物体の最大数 |
+ComfyUIのURLが `http://127.0.0.1:8188` と異なる場合は、[サーバーのオプション](docs/development.md#サーバーのオプション)の `--comfyui` を指定します。
 
-> **注意:** このサーバーには認証も暗号化もありません。信頼できるLANの中だけで使ってください。
+> サーバーには認証・暗号化がありません。信頼できるLAN内で使ってください。
 
-### 3. Questアプリをビルドする
+### 2. QuestアプリからPCに接続する
 
-1. `UnityMetaQuest` フォルダを Unity で開きます
-2. 使うシーンを開きます
-   - `Assets/Scenes/0-SpatialSearchLite.unity` : 見つかった物を、指定した単色（既定は黄色）の点群で表示します
-   - `Assets/Scenes/1-SpatialSearchLiteGrab.unity` : 見つかった物を、撮影したカメラ画像を貼った面で表示し、コントローラでつかんで動かせます（[6. 見つけた物をつかむ](#6-見つけた物をつかむ1-spatialsearchlitegrab-シーン)）
-   - `Assets/Scenes/2-SpatialSearchLiteFrame(Experimental).unity` : Grab シーンの機能に加えて、両手の指で作った枠で物体を指すと、その物体1つを複製します。複製は手でもつかめます（[7. 指の枠で物体をコピーする](#7-指の枠で物体をコピーする2-spatialsearchliteframeexperimental-シーン)）
-3. Build Profiles のシーン一覧で、使うシーンにチェックを入れます
-4. Questへビルドして実行します
+1. Questアプリを起動します。初回のビルド直後にすでに起動している場合は、そのまま進めます。
+2. **空間データ**と**カメラ**へのアクセスを求められたら、両方とも許可します。
+3. **Server IP address** に、Pythonサーバーを動かしているPCのLAN内のIPアドレスを入力し、**Connect** を押します。
 
-### 4. サーバーに接続する
+Windowsでは、PCのターミナルで `ipconfig` を実行し、Questと同じネットワークにつながる Wi-Fi / Ethernet の **IPv4 アドレス**を確認します。例えば `192.168.1.10` です。`0.0.0.0` はサーバーの待ち受け用の値なので、この入力欄にはPCのIPアドレスを入れてください。
 
-1. 起動時に **空間データ** と **カメラ** へのアクセスを求められるので、両方とも許可します（許可しないと検索できません）
-2. 目の前に **Server IP address** のダイアログが出るので、PCのIPアドレスを入力して **Connect** を押します（Windowsなら `ipconfig` で確認できます）。接続できるとダイアログが閉じます
+**ダイアログが閉じたら接続完了です。** 入力したIPアドレスは保存され、次回は入力済みの状態で表示されます。
 
-入力したIPアドレスは保存され、次回からは最初から入った状態で表示されます。ダイアログが閉じない場合は接続できていません。IPアドレスを確かめて、もう一度 **Connect** を押してください。途中で接続が切れた場合は、アプリを起動し直してください。
+### 3. 目の前の物を検索する
 
-### 5. Questで検索する
+1. 左コントローラのパネルの **Search** を、右手のレイで押します。
+2. 開いた検索ウィンドウに、物の名前を**英語で**入力します。最初は `monitor`、`chair`、`cup` などを試してください。
+3. 探したい物の方を向き、ウィンドウの **Search** を押します。ウィンドウは自動で閉じます。
+4. 結果が返ると、見つかった物の位置がハイライトされます。左コントローラのパネルには検索の状態と見つかった数が表示されます。
 
-1. 左コントローラのパネルにある **Search** ボタンを右手のレイで押すと、検索ウィンドウが開きます（もう一度押すと閉じます）
-2. 検索ウィンドウに探したい物の名前を **英語で** 入力します（例: `monitor`、`chair`、`cup`）
-3. 探したい物の方を向いて、ウィンドウの **Search** を押します。ウィンドウは自動で閉じます
-4. 数秒後、見つかった物体の位置に単色（既定は黄色）の点群が表示されます（`1-SpatialSearchLiteGrab` シーンでは撮影したカメラ画像を貼った面）。左コントローラのパネルに検索の状態と見つかった数が表示されます
+基本シーンでは黄色の点群が表示されます。Grab / Frame シーンでは、撮影したカメラ画像付きで表示されます。別の物を検索すると、前の結果は消えます。
 
-別の物を探すときは、もう一度検索ウィンドウを開いて検索します。前の検索結果の点群は消えます。
-
-### 6. 見つけた物をつかむ（1-SpatialSearchLiteGrab シーン）
-
-`1-SpatialSearchLiteGrab` シーンでは、見つかった物体ごとに別々の面になり、コントローラでつかんで動かせます。面には、撮影した瞬間のカメラ画像が貼ってあります。
-
-1. コントローラを物体に近づけます。つかめる距離に入ると、物体が白っぽくなります
-2. **トリガーボタン**（人差し指で引くボタン）を引くとつかめます。つかんでいる間は物体が黄色がかります
-3. 引いたまま動かすと物体が付いてきます。離すとその場に残ります
-
-両手のコントローラで同じ物体をつかむと、大きさも変えられます。このシーンでは手（ハンドトラッキング）ではつかめません（`2-SpatialSearchLiteFrame(Experimental)` シーンでは手でもつかめます）。
-
-### 7. 指の枠で物体をコピーする（2-SpatialSearchLiteFrame(Experimental) シーン）
-
-`2-SpatialSearchLiteFrame(Experimental)` シーンでは、両手で写真を撮るときの枠を作って物体を指すと、その物体1つだけを切り出し、撮影した位置に複製します。検索語は要りません。複製は手でもコントローラでもつかんで動かせます。
-
-事前に Quest の **設定 > 動きのトラッキング > ハンドトラッキング** をオンにしてください。サーバーへの接続まではコントローラで操作し、そのあとコントローラを置きます。
-
-1. 顔の前（腕を軽く伸ばしたあたり）で、両手の親指と人差し指でL字を作ります。他の指は軽く握ります
-   - 左手は枠の **左上** の角: 人差し指を右へ、親指を下へ向けます
-   - 右手は枠の **右下** の角: 人差し指を左へ、親指を上へ向けます
-2. 枠として認識されると白い四角が出て、枠の中心の先にある物の表面に点が出ます。点を物体の真ん中に合わせます
-3. そのまま約2秒止めると、点の周りのリングが一周して緑になり、`Lower your hands` と出ます（ロック）
-4. 両手を下ろして、カメラに写らないようにします。手が見えなくなると撮影され、`Copying...` と出ます
-5. 数秒後、指した物体の複製がその場所に現れます。手でつまむか握ってつかみ、好きな場所へ動かせます
-
-- 点が **橙色** のときは、物体の縁や穴を指しています。ロックしないので、物体の真ん中へ点を動かしてください
-- ロックしてから3秒以内に手を下ろさないと取り消されます（`Canceled`）。ロックした点が視界から外れたときも取り消されます（`Lost the target`）
-- 手を下ろす間に頭が動いても大丈夫です。ロックした点を実世界の位置として覚えていて、撮影した画像の上でその位置を指します
-- 物体の一部（顔だけ、取っ手だけなど）が切り出されることがあります。物体の真ん中を指すと、全体が取れやすくなります
-- このシーンでも、左コントローラの **Search** から検索語で探せます。新しく複製するか検索すると、前の結果は消えます
-
-## 設定できる項目
-
-| 場所（Hierarchy） | 項目 | 内容 |
-|---|---|---|
-| `[MainCoordinator]` の Main Coordinator | Default Server Ip | 一度もIPを入力していないときにダイアログへ入れておく値 |
-| `Logic/Search` の Search Capture | Min / Max Depth Meters | この距離の範囲にある点だけを使います |
-| `Logic/WebSocket` の Web Socket Search Transport | Server Port | Pythonサーバーのポート |
-| `SearchWindow` / `ServerDialog` の Head Follow | Distance / Height Offset / Follow Speed | ウィンドウを出す距離・高さ、頭に追いつく速さ |
-| `Logic/SearchResultView`（0-SpatialSearchLite） | Color / Point Size | 結果の点の色（既定は黄色）と大きさ |
-| `Logic/SearchResultView`（1-SpatialSearchLiteGrab） | Outlier Ratio / Min Collider Size | つかめる範囲の箱を決めるときに外す端の点の割合と、箱の最小の大きさ |
-| `Packages/SpatialSearch/Materials/SpatialSearchColoredPointsMat`（Project ウィンドウでは Packages > SpatialSearch） | Depth Tolerance | 重なった板を同じ面として描く奥行きの幅（板の大きさの何倍か）。ちらつくときは上げ、後ろの板が透けて見えるときは下げます |
-| 〃 | Fade Start / Fade End | 物体の正面（点群から求めた面の向き）と今の視点の向きの内積（1=正面から、0=真横、負=裏側）。Fade Start 以上で不透明、Fade End 以下で完全に透明、その間はなめらかに変えます。もっと横から見ても見えるようにするときは Fade End を下げます |
-| `Assets/Prefabs/GrabbableSearchResult` の Interactable Color Visual | Hover / Select Color State | 近づけた・つかんだときに重ねる色（Aが重ねる強さ） |
-| `Logic/FrameCopy` の Frame Copy Controller（2-SpatialSearchLiteFrame(Experimental)） | Stable Angle / Lock Seconds | 点がこの角度（度）以内に止まっている時間がこの秒数になると、ロックします |
-| 〃 | Hands Gone Seconds / Lower Hands Timeout | 両手がカメラ画像から消えてから撮影するまでの時間と、ロックしてから手を下ろすのを待つ時間（秒） |
-| 〃 | Result Timeout | サーバーの結果を待つ時間（秒）。過ぎると次の操作を受け付けます |
-| 〃 | Dot Angle / Ring Angle / Aim / Edge / Locked Color | 点とリングの見た目の大きさ（度）と、狙っているとき・縁を指しているとき・ロックしたときの色 |
+つかんで動かしたり、指の枠でコピーしたりする操作は、[追加機能の操作手順](docs/interactions.md)へ進んでください。
 
 ## うまくいかないとき
 
 | 症状 | 確認すること |
 |---|---|
-| コントローラのパネルに `Not connected to the server` と出る | 入力したIPアドレス、PCのファイアウォール（ポート8765）、サーバーを `--host 0.0.0.0` で起動したかを確認し、アプリを起動し直して接続してください |
-| サーバーに `could not reach` のようなエラーが出る | ComfyUIが起動しているか、`--comfyui` のURLが合っているか |
-| `ComfyUI execution failed` と出る | チェックポイントのファイル名と置き場所（`models/checkpoints/`）が合っているか |
-| `was not found` になる | 検索語を英語の一般的な名前にする、物体に近づく、`--threshold` を下げる |
-| 点がずれて表示される | 検索中は頭を大きく動かさないでください。撮影した瞬間の位置で点群を作っています |
-| 物体が透けて見える・見えなくなる | 物体の正面（表面の向き）から離れて横や裏から見るほど透明にしています。表面を自分の方へ向け直すか、マテリアルの Fade Start / Fade End を調整してください |
-| 点群をつかめない | `1-SpatialSearchLiteGrab` / `2-SpatialSearchLiteFrame(Experimental)` シーンか確認し、コントローラを点群の中まで入れてからトリガーボタンを引いてください。手でつかめるのは `2-SpatialSearchLiteFrame(Experimental)` シーンだけです |
-| 指で枠を作っても白い四角が出ない | ハンドトラッキングがオンで、コントローラを手から離しているか確認してください。左手が左上・右手が右下で、人差し指が横、親指が縦（左手は下、右手は上）になっているかも確かめてください |
-| 枠は出るが点が出ない | 枠の先にある物までの距離が、Search Capture の Min / Max Depth Meters（既定は 0.1〜5m）の範囲にあるか確認してください |
-| `Copying...` のまま進まない | 検索語での検索の結果待ちと重なると、撮影が無視されます。30秒で元に戻るので、やり直してください |
+| **Connect** を押してもダイアログが閉じない / `Not connected to the server` と出る | QuestとPCが同じLANにいるか、PCのIPアドレスが正しいか、サーバーを `--host 0.0.0.0` で起動したかを確認します。PCのファイアウォールでポート8765への接続も確認してください。接続が切れた場合はアプリを起動し直します |
+| サーバーに `could not reach` のようなエラーが出る | ComfyUIが起動しているか、`--comfyui` のURLが合っているかを確認します |
+| `ComfyUI execution failed` と出る | ComfyUIを更新し、モデルのファイル名と置き場所（`models/checkpoints/`）を確認します |
+| `was not found` と出る | 検索語を英語の一般的な名前に変えるか、物体に近づいて試します。必要なら [サーバーの `--threshold`](docs/development.md#サーバーのオプション) を下げます |
+| 点がずれて表示される | 撮影した瞬間の位置で点群を作っています。検索中は頭を大きく動かさずに試してください |
 
-## しくみ
+つかむ操作・指の枠の問題は、[追加機能の「うまくいかないとき」](docs/interactions.md#うまくいかないとき)を参照してください。
 
-Unity側のスクリプトは2か所に分かれています。
+## さらに詳しく
 
-| 場所 | 中身 |
-|---|---|
-| `Packages/SpatialSearch/`（パッケージ `com.yoshinaga.spatialsearch`、名前空間 `SpatialSearch`） | 他のプロジェクトでも使える部分: `SpatialSearchDataSource`、撮影データと検索結果の型（`SearchData`）、`SearchClient`、通信路の共通の入り口（`SearchTransportBase`）、結果の表示（`SearchResultView` / `GrabbableSearchResultView` / `SearchResultMeshBuilder`）、シェーダーとマテリアル |
-| `UnityMetaQuest/Assets/Scripts/SpatialSearchLite/` | このプロジェクト（Meta Quest）固有の部分: `MainCoordinator`、`SearchCapture`、`WebSocketSearchTransport`、`FrameCopyController`、`HeadFollow` |
-
-パッケージは `WebSocketSharpUtl` と同じく、`UnityMetaQuest/Packages/manifest.json` から `file:../../Packages/SpatialSearch` で読み込んでいます。使い方は [Packages/SpatialSearch/README.md](Packages/SpatialSearch/README.md) にあります。
-
-`MainCoordinator` が3つのクラスに同じ `SpatialSearchDataSource` を渡し、各クラスはそこに流れてくるデータを受け取って動きます。ボタンや入力欄などUIの操作は `MainCoordinator` がまとめて受け持ち、3つのクラスはUIを知りません。`2-SpatialSearchLiteFrame(Experimental)` シーンでは、手の枠を扱う `FrameCopyController` も加わります。
-
-| クラス | 役割 |
-|---|---|
-| `MainCoordinator` | 3つのクラスをつなぎ、UIの操作（IPダイアログ、検索ウィンドウの開閉、検索の開始）と、コントローラのパネルの状態表示（検索中・見つかった数・エラー）を受け持ちます |
-| `SearchCapture` | `Capture(検索語)` が呼ばれたらカメラ画像と深度を撮影します。深度の各点が画像のどこに写るか（UV）と、その点での面の向き（法線）も求めて `SetCapture` します。`CaptureAt(位置)` で撮影すると、その位置が画像のどこに写るかも撮影データに入れます（点で探す）。手の枠のために、深度へ向けたレイキャストもします |
-| `SearchClient` | 撮影データを受け取ったら、画像と検索語（点で探すときは画像上の点）をJSONにして、通信路でサーバーへ送ります。返ってきたマスクを `SetResult` します。通信そのものは次の通信路に任せていて、`SearchClient` はWebSocketを知りません |
-| `WebSocketSearchTransport` | `SearchClient` の通信路（`SearchTransportBase`）をWebSocketで実装したものです。`WebSocketSharpUtl` の `WebSocketClientManager` を包み、`ws://IP:ポート/` への接続と、文字列の送受信、接続の状態の通知を受け持ちます。HTTPなど別の方法にしたいときは、`SearchTransportBase` を継承したクラスに差し替えます |
-| `FrameCopyController` | 両手の枠の形を判定し、頭から枠の中心へのレイが深度に当たった位置に点を出します。点がロックされたら、手が下りるのを待って `SearchCapture.CaptureAt` で撮影します（2-SpatialSearchLiteFrame(Experimental) シーン） |
-| `SearchResultView` | マスクの白い部分に写っていた点だけを集めて、まとめて単色で表示します（0-SpatialSearchLite シーン） |
-| `GrabbableSearchResultView` | 見つかった物体ごとにひな形のプレハブ `GrabbableSearchResult` を複製し、物体の点を、撮影したカメラ画像を貼った四角形で表示します。つかめる範囲の箱も物体に合わせます（1-SpatialSearchLiteGrab シーン。2-SpatialSearchLiteFrame(Experimental) シーンではひな形が `GrabbableCopy`） |
-| `SearchResultMeshBuilder` | `GrabbableSearchResultView` が使う部品です。点（深度の1画素）ごとに、その画素が写している範囲の四角形を作り、四隅をカメラ画像へ投影してUVにします |
-
-画像は点ごとに1色を割り当てるのではなく、四角形の中でカメラ画像の画素そのものを引いて貼っています（シェーダーはパッケージの `SpatialSearchColoredPointsURP`）。そのため、近づいても粗いドットにはなりません。
-
-四角形はシェーダーが毎フレーム視点の方へ向けるので（ビルボード）、物体を傾けても板は常にこちらを向きます。四隅と画像の対応は撮影したときのままなので、撮影した向きから見るとぴったり合い、大きく傾けると貼った画像が少しずれて見えます。
-
-そこで、物体の正面から離れて見るほど物体を透明にしています。正面は点群から求めた面の向きで（本や画面なら表面の向き）、それと今の視点から見た向きの内積で決めていて、真横ではほとんど透明に、裏側からは見えなくなります。撮影したカメラの方向ではなく面の向きを基準にしているので、机の上の本のように斜めから撮った物でも、表面を自分に向けた姿勢から上下左右のどちらへ傾けても、同じ角度で透けていきます。物体をつかんで動かしたり回したりすると、正面も物体と一緒に動くので、表面を自分の方へ向け直せば再び見えます。
-
-つかむ仕組みは Meta XR Interaction SDK の部品をそのまま使っています。プレハブ `GrabbableSearchResult` に `Grabbable` / `GrabFreeTransformer` / `GrabInteractable` が付いていて、シーンのインタラクションリグにあるコントローラの `ControllerGrabInteractor` からつかめます。`2-SpatialSearchLiteFrame(Experimental)` シーンのプレハブ `GrabbableCopy` には `HandGrabInteractable` も付いていて、手の `HandGrabInteractor` からもつかめます。
-
-手の枠で指した点は、実世界の位置（深度にレイが当たった位置）として覚えます。手を下ろしてから撮影した画像へこの位置を投影し直すので、枠を作った手は撮影した画像に写りません。レイは頭の中心から引くので、両目で見ている枠の中心とは少しずれますが、点を見ながら物体に合わせれば気になりません。
-
-サーバー側は `server/` にあります。`server.py` がUnityとのWebSocket通信を、`sam3_comfyui.py` がComfyUIの呼び出しを担当します。検索語の代わりに画像上の点（`{"type": "point", "x": .., "y": .., "image": ..}`、左上が原点のピクセル）を受け取ると、SAM 3.1 の点プロンプト（`SAM3_Detect` の `positive_coords`）で、その点に写っている物体1つのマスクを返します。
+- [つかむ・指の枠でコピーする](docs/interactions.md)：Grab / Frame シーンの操作手順
+- [設定・しくみ](docs/development.md)：サーバーのオプション、Unityの設定項目、実装の解説
+- [SpatialSearch パッケージ](Packages/SpatialSearch/README.md)：別のUnityプロジェクトで利用する方法
 
 ## ライセンス
 
-[MIT License](LICENSE)
+このリポジトリは [MIT License](LICENSE) です。SAM 3.1 のモデルは [Comfy-Org/sam3.1](https://huggingface.co/Comfy-Org/sam3.1) で配布されており、SAM License が適用されます。
