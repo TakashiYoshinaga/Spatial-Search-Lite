@@ -6,9 +6,9 @@
 
 | 体験できること | デモ動画 |
 |---|---|
-| 言葉で探した物をハイライトする | [YouTube](https://youtu.be/CpNNvYJ_eqo) |
-| 言葉で探した物をつかんで動かす | [YouTube](https://youtu.be/KBflmsotNTc) |
-| 指の枠で物をコピーする（実験機能） | [YouTube](https://youtu.be/BAKXGBKgiSI) |
+| 言葉で探した物をハイライトする | [<img src="docs/Materials/demo-highlight.jpg" alt="言葉で探した物をハイライトするデモ動画" width="160">](https://youtu.be/CpNNvYJ_eqo)<br>[▶ YouTube](https://youtu.be/CpNNvYJ_eqo) |
+| 言葉で探した物をつかんで動かす | [<img src="docs/Materials/demo-grab.jpg" alt="言葉で探した物をつかんで動かすデモ動画" width="160">](https://youtu.be/KBflmsotNTc)<br>[▶ YouTube](https://youtu.be/KBflmsotNTc) |
+| 指の枠で物をコピーする（実験機能） | [<img src="docs/Materials/demo-frame.jpg" alt="指の枠で物をコピーするデモ動画" width="160">](https://youtu.be/BAKXGBKgiSI)<br>[▶ YouTube](https://youtu.be/BAKXGBKgiSI) |
 
 **体験には Meta Quest 3 / 3S と、AI処理を行うPCが必要です。** この手順では、リポジトリをPCに取得し、UnityでアプリをビルドしてQuestへインストールします。
 
