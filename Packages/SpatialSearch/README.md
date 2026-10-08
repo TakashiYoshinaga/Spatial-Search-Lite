@@ -21,6 +21,8 @@
 
 このパッケージの `package.json` では `dependencies` が空なので、R3 と URP は自動では入りません。使う側のプロジェクトで追加してください。レジストリの設定とバージョンの例は、[このリポジトリの manifest.json](../../UnityMetaQuest/Packages/manifest.json) にあります。
 
+R3 の具体的な導入操作は、[R3 and UniTask Installation Guide（英語・画像付き）](../../docs/ExternalTools/R3_UniTask_Installation.md) を参照してください。
+
 通信のライブラリには依存しません。通信路（`SearchTransportBase` を継承したクラス）が使うパッケージは、使う側で入れてください。
 
 `manifest.json` の `dependencies` に追加する項目の例です。パスは `manifest.json` から見た相対パスなので、別のプロジェクトでは配置に合わせて変更してください。WebSocketSharpUtl は、このリポジトリの WebSocket 版の通信路を使う場合に必要です。既存の依存パッケージは残してください。

@@ -4,6 +4,8 @@
 
 体験に必要な準備と起動手順は README にあります。このページは、設定を調整したり、実装を読んだりするための補足です。
 
+R3 などの導入操作は、[R3 and UniTask Installation Guide（英語・画像付き）](ExternalTools/R3_UniTask_Installation.md) を参照してください。
+
 ## サーバーのオプション
 
 `python server/server.py` に次のオプションを付けられます。コマンドはリポジトリのルートで実行してください。
