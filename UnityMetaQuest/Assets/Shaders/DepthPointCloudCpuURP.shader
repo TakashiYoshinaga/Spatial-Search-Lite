@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Takashi Yoshinaga
+// Licensed under the MIT License. See LICENSE in the repository root.
+
 Shader "TryAR/URP/Depth Point Cloud CPU"
 {
     Properties

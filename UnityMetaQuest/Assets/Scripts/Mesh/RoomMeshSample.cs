@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Takashi Yoshinaga
+// Licensed under the MIT License. See LICENSE in the repository root.
+
 using Meta.XR.MRUtilityKit;
 using UnityEngine;
 /// Copy right 2025 Takashi Yoshinaga

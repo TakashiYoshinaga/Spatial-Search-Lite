@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Takashi Yoshinaga
+// Licensed under the MIT License. See LICENSE in the repository root.
+
 using UnityEngine;
 
 // ウィンドウを頭の正面に置き、頭の動きにゆっくり追従させる。

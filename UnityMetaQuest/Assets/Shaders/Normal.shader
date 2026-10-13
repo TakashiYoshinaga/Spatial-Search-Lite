@@ -1,4 +1,7 @@
-﻿Shader "TryAR/Unlit/Normal"
+﻿// Copyright (c) 2026 Takashi Yoshinaga
+// Licensed under the MIT License. See LICENSE in the repository root.
+
+Shader "TryAR/Unlit/Normal"
 {
     Properties
     {
