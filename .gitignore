@@ -59,3 +59,8 @@ Thumbs.db
 # Meta Immersive Debugger DevAgent: holds a local access token and the PC address
 UnityMetaQuest/Assets/Resources/DevAgentSettings.asset
 UnityMetaQuest/Assets/Resources/DevAgentSettings.asset.meta
+
+# Demo videos and their subtitle/cover files (large; shared via YouTube)
+/video/
+/video2/
+/newvideo/
