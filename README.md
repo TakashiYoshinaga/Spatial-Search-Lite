@@ -157,3 +157,8 @@ For problems with grabbing and the finger frame, see ["Troubleshooting" in the a
 ## License
 
 This repository is under the [MIT License](LICENSE). The SAM 3.1 model is distributed at [Comfy-Org/sam3.1](https://huggingface.co/Comfy-Org/sam3.1) and the SAM License applies to it.
+
+## Support
+
+If you find this project useful, you can support me via PayPal:  
+[![Donate with PayPal](https://img.shields.io/badge/Donate-PayPal-blue.svg)](https://paypal.me/TakashiYoshinaga)  
